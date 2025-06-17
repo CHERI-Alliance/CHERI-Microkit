@@ -1,4 +1,5 @@
 # Copyright 2021, Breakaway Consulting Pty. Ltd.
+# Copyright 2025, Capabilities Limited
 # SPDX-License-Identifier: BSD-2-Clause
 
 """The SDK build script.
@@ -81,6 +82,7 @@ class BoardInfo:
 class ConfigInfo:
     name: str
     debug: bool
+    cheri: bool
     kernel_options: KERNEL_OPTIONS
 
 
@@ -308,17 +310,64 @@ SUPPORTED_BOARDS = (
             "KernelRiscvExtF": True,
         },
     ),
+    BoardInfo(
+        name="hobgoblin_vcu118",
+        arch=KernelArch.RISCV64,
+        gcc_cpu=None,
+        loader_link_address=0x90000000,
+        kernel_options={
+            "KernelPlatform": "hobgoblin-vcu118",
+            "KernelIsMCS": True,
+            "QEMU_MEMORY": "2048",
+            "KernelRiscvExtD": True,
+            "KernelRiscvExtF": True,
+        },
+    ),
+    BoardInfo(
+        name="toooba_de10",
+        arch=KernelArch.RISCV64,
+        gcc_cpu=None,
+        loader_link_address=0xd0000000,
+        kernel_options={
+            "KernelPlatform": "toooba-de10",
+            "KernelIsMCS": True,
+            "KernelRiscvExtD": True,
+            "KernelRiscvExtF": True,
+        },
+    ),
+    BoardInfo(
+        name="toooba_besspin",
+        arch=KernelArch.RISCV64,
+        gcc_cpu=None,
+        loader_link_address=0x90000000,
+        kernel_options={
+            "KernelPlatform": "toooba-besspin",
+            "KernelIsMCS": True,
+            "KernelRiscvExtD": True,
+            "KernelRiscvExtF": True,
+        },
+    ),
+)
+
+SUPPORTED_CHERI_BOARDS = (
+   "qemu_virt_riscv64",
+   "hobgoblin_vcu118",
+   "toooba_de10",
+   "toooba_besspin",
+   "ariane"
 )
 
 SUPPORTED_CONFIGS = (
     ConfigInfo(
         name="release",
         debug=False,
+        cheri=False,
         kernel_options={},
     ),
     ConfigInfo(
         name="debug",
         debug=True,
+        cheri=False,
         kernel_options={
             "KernelDebugBuild": True,
             "KernelPrinting": True,
@@ -328,11 +377,21 @@ SUPPORTED_CONFIGS = (
     ConfigInfo(
         name="benchmark",
         debug=False,
+        cheri=False,
         kernel_options={
             "KernelArmExportPMUUser": True,
             "KernelDebugBuild": False,
             "KernelVerificationBuild": False,
             "KernelBenchmarks": "track_utilisation"
+        },
+    ),
+    ConfigInfo(
+        name="cheri",
+        debug=True,
+        cheri=True,
+        kernel_options={
+            "KernelDebugBuild": True,
+            "KernelVerificationBuild": False,
         },
     ),
 )
@@ -533,7 +592,7 @@ def build_elf_component(
     build_dir.mkdir(exist_ok=True, parents=True)
     target_triple = f"{board.arch.target_triple()}"
     defines_str = " ".join(f"{k}={v}" for k, v in defines)
-    defines_str += f" ARCH={board.arch.to_str()} BOARD={board.name} BUILD_DIR={build_dir.absolute()} SEL4_SDK={sel4_dir.absolute()} TARGET_TRIPLE={target_triple} LLVM={llvm}"
+    defines_str += f" ARCH={board.arch.to_str()} BOARD={board.name} BUILD_DIR={build_dir.absolute()} SEL4_SDK={sel4_dir.absolute()} TARGET_TRIPLE={target_triple} LLVM={llvm} CHERI={config.cheri}"
 
     if board.gcc_cpu is not None:
         defines_str += f" GCC_CPU={board.gcc_cpu}"
@@ -569,7 +628,8 @@ def build_lib_component(
     build_dir: Path,
     board: BoardInfo,
     config: ConfigInfo,
-    llvm: bool
+    llvm: bool,
+    cheri_purecap: bool
 ) -> None:
     """Build a specific library component.
 
@@ -580,10 +640,14 @@ def build_lib_component(
     build_dir.mkdir(exist_ok=True, parents=True)
 
     target_triple = f"{board.arch.target_triple()}"
-    defines_str = f" ARCH={board.arch.to_str()} BUILD_DIR={build_dir.absolute()} SEL4_SDK={sel4_dir.absolute()} TARGET_TRIPLE={target_triple} LLVM={llvm}"
+    defines_str = f" ARCH={board.arch.to_str()} BUILD_DIR={build_dir.absolute()} SEL4_SDK={sel4_dir.absolute()} TARGET_TRIPLE={target_triple} LLVM={llvm} CHERI={cheri_purecap}"
 
     if board.gcc_cpu is not None:
         defines_str += f" GCC_CPU={board.gcc_cpu}"
+
+    r = system(
+        f"{defines_str} make clean -C {component_name}"
+    )
 
     r = system(
         f"{defines_str} make -C {component_name}"
@@ -594,7 +658,12 @@ def build_lib_component(
         )
     lib = build_dir / f"{component_name}.a"
     lib_dir = root_dir / "board" / board.name / config.name / "lib"
-    dest = lib_dir / f"{component_name}.a"
+
+    if cheri_purecap:
+        dest = lib_dir / f"{component_name}_purecap.a"
+    else:
+        dest = lib_dir / f"{component_name}.a"
+
     dest.unlink(missing_ok=True)
     copy(lib, dest)
     # Make output read-only
@@ -724,9 +793,22 @@ def main() -> None:
     build_dir = Path("build")
     for board in selected_boards:
         for config in selected_configs:
+
+            # Build CHERI config only for boards/archs that support it
+            if config.cheri:
+                if board.name in SUPPORTED_CHERI_BOARDS:
+                    if board.arch == KernelArch.RISCV64:
+                        # cheriTODO: change the name of the extension when it's finalised
+                        board.kernel_options["KernelRiscvExtY"] = True
+                    else: # cheriTODO: add Morello here
+                        continue
+                else:
+                      continue
+
             if not args.skip_sel4:
                 sel4_gen_config = build_sel4(sel4_dir, root_dir, build_dir, board, config, args.llvm)
-            loader_printing = 1 if config.name == "debug" else 0
+
+            loader_printing = 1 if config.debug else 0
             loader_defines = [
                 ("LINK_ADDRESS", hex(board.loader_link_address)),
                 ("PRINTING", loader_printing)
@@ -746,7 +828,14 @@ def main() -> None:
 
             build_elf_component("loader", root_dir, build_dir, board, config, args.llvm, loader_defines)
             build_elf_component("monitor", root_dir, build_dir, board, config, args.llvm, [])
-            build_lib_component("libmicrokit", root_dir, build_dir, board, config, args.llvm)
+
+            # Build two versions of libmicrokit when building for a CHERI config. This is because we
+            # allow both non-CHERI and purecap CHERI running side-by-side on a CHERI-enabled kernel.
+            # A purecap protection domain will use libmicrokit_purecap.a while others will use libmicrokit.a
+            if config.cheri:
+                build_lib_component("libmicrokit", root_dir, build_dir, board, config, args.llvm, True)
+
+            build_lib_component("libmicrokit", root_dir, build_dir, board, config, args.llvm, False)
 
     # Setup the examples
     for example, example_path in EXAMPLES.items():
