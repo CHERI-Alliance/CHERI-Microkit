@@ -71,6 +71,16 @@ void microkit_dbg_put32(seL4_Uint32 x);
 
 static inline void microkit_internal_crash(seL4_Error err)
 {
+#if defined(__CHERI_PURE_CAPABILITY__)
+    /*
+     * Currently crash by dereferencing an invalid capability pointer
+     *
+     * In CHERI systems, integers aren't the same as pointers, so a cast from
+     * an integer to a pointer will return an invalid pointer capability that
+     * will trap upon dereference.
+     */
+    int *x = (int *)(__uintcap_t) err;
+#else
     /*
      * Currently crash be dereferencing NULL page
      *
@@ -79,6 +89,7 @@ static inline void microkit_internal_crash(seL4_Error err)
      * solution but good for now.
      */
     int *x = (int *)(seL4_Word) err;
+#endif
     *x = 0;
 }
 
@@ -109,6 +120,38 @@ static inline void microkit_irq_ack(microkit_channel ch)
 static inline void microkit_pd_restart(microkit_child pd, seL4_Word entry_point)
 {
     seL4_Error err;
+#if defined(CONFIG_HAVE_CHERI)
+    /* We are under a CHERI-enabled kernel, but we can be compiled with a CHERI toolchain
+     * or not at all. In either case, the CHERI hardware PCC register needs to be a valid
+     * and tagged register. We will first read the current PC address from the TCB,
+     * then derive a valid PCC from its existing PCC.
+     */
+    seL4_TCB_CheriReadRegister_t unpacked_reg;
+    unpacked_reg = seL4_TCB_CheriReadRegister(
+              BASE_TCB_CAP + pd,
+              0 /* PCC register index */
+          );
+
+    /* Construct and write a new PCC with the restart address from the existing
+     * PCC, which should already be a valid CHERI register covering
+     * the entire code segement.
+     * This doesn't increase any permissions or bounds for PCC, following CHERI rules.
+     */
+    err = seL4_TCB_CheriWriteRegister(
+              BASE_TCB_CAP + pd,
+              0, /* PCC register index */
+              0, /* Invalid vspace will force deriving from the PCC register and not construct a completely new CHERI cap. */
+              unpacked_reg.cheri_base,
+              entry_point,
+              unpacked_reg.cheri_size,
+              unpacked_reg.cheri_meta
+          );
+
+    if (err == seL4_NoError) {
+        /* Need to resume the TCB to execute from the new PCC */
+        err = seL4_TCB_Resume(BASE_TCB_CAP + pd);
+    }
+#else
     seL4_UserContext ctxt = {0};
     ctxt.pc = entry_point;
     err = seL4_TCB_WriteRegisters(
@@ -118,6 +161,7 @@ static inline void microkit_pd_restart(microkit_child pd, seL4_Word entry_point)
               1, /* writing 1 register */
               &ctxt
           );
+#endif
 
     if (err != seL4_NoError) {
         microkit_dbg_puts("microkit_pd_restart: error writing TCB registers\n");

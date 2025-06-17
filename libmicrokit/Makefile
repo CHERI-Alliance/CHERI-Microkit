@@ -1,5 +1,6 @@
 #
 # Copyright 2021, Breakaway Consulting Pty. Ltd.
+# Copyright 2025, Capabilities Limited
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #
@@ -13,6 +14,10 @@ endif
 
 ifeq ($(strip $(TARGET_TRIPLE)),)
 $(error TARGET_TRIPLE must be specified)
+endif
+
+ifndef CHERI
+CHERI = False
 endif
 
 ifeq ($(strip $(LLVM)),True)
@@ -31,16 +36,28 @@ else
   CFLAGS_TOOLCHAIN := -Wno-maybe-uninitialized
 endif
 
+ifeq ($(CHERI),True)
+ifeq ($(ARCH),riscv64)
+  # Build in purecap CHERI ABI
+  ARCH_FLAGS := -march=rv64imafdc_zicsr_zcherihybrid -mabi=l64pc128d
+endif
+OBJS := cheri.o
+else
+ifeq ($(ARCH),riscv64)
+  ARCH_FLAGS := -march=rv64imafdc_zicsr_zifencei -mabi=lp64d
+endif
+endif
+
 ifeq ($(ARCH),aarch64)
-	ASM_FLAGS := -mcpu=$(GCC_CPU)
-	CFLAGS_AARCH64 := -mcpu=$(GCC_CPU)
-	CFLAGS_ARCH := $(CFLAGS_AARCH64)
-	ARCH_DIR := aarch64
+  ASM_FLAGS := -mcpu=$(GCC_CPU) $(ARCH_FLAGS)
+  CFLAGS_AARCH64 := -mcpu=$(GCC_CPU) $(ARCH_FLAGS)
+  CFLAGS_ARCH := $(CFLAGS_AARCH64)
+  ARCH_DIR := aarch64
 else ifeq ($(ARCH),riscv64)
-	ASM_FLAGS := -march=rv64imafdc_zicsr_zifencei -mabi=lp64d
-	CFLAGS_RISCV64 := -mcmodel=medany -march=rv64imafdc_zicsr_zifencei -mabi=lp64d
-	CFLAGS_ARCH := $(CFLAGS_RISCV64)
-	ARCH_DIR := riscv
+  ASM_FLAGS := $(ARCH_FLAGS)
+  CFLAGS_RISCV64 := -mcmodel=medany $(ARCH_FLAGS)
+  CFLAGS_ARCH := $(CFLAGS_RISCV64)
+  ARCH_DIR := riscv
 endif
 
 CFLAGS := -std=gnu11 \
@@ -52,7 +69,7 @@ CFLAGS := -std=gnu11 \
 		  $(CFLAGS_ARCH)
 
 LIBS := libmicrokit.a
-OBJS := main.o crt0.o dbg.o
+OBJS := main.o crt0.o dbg.o $(OBJS)
 
 $(BUILD_DIR)/%.o : src/$(ARCH_DIR)/%.S
 	$(CC) -x assembler-with-cpp -c $(CFLAGS) $< -o $@
@@ -69,3 +86,6 @@ all: $(LIB)
 
 $(LIB): $(addprefix $(BUILD_DIR)/, $(OBJS))
 	$(AR) -rv $@ $^
+
+clean:
+	rm -f $(addprefix $(BUILD_DIR)/, $(OBJS))

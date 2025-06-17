@@ -34,6 +34,16 @@ seL4_Word microkit_pps;
 
 extern seL4_IPCBuffer __sel4_ipc_buffer_obj;
 
+#if defined(__CHERI_PURE_CAPABILITY__)
+/* The IPC buffer pointer needs to be a valid capability pointer with proper bounds
+ * and permissions. Simply referring to &__sel4_ipc_buffer_obj won't get us that.
+ * Instead, the microkit tool will generate an invocation to construct and write
+ * a capability to this global variable that should be used in purecap protection
+ * domains.
+ */
+seL4_IPCBuffer *__sel4_ipc_buffer_cap;
+#endif
+
 seL4_IPCBuffer *__sel4_ipc_buffer = &__sel4_ipc_buffer_obj;
 
 extern const void (*const __init_array_start [])(void);
@@ -110,6 +120,10 @@ static void handler_loop(void)
 void main(void)
 {
     run_init_funcs();
+#if defined(__CHERI_PURE_CAPABILITY__)
+    /* Use the valid IPC buffer pointer capability */
+    __sel4_ipc_buffer = __sel4_ipc_buffer_cap;
+#endif
     init();
 
     /*
