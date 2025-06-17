@@ -67,7 +67,14 @@ def main():
     parser.add_argument(
         "--llvm",
         action="store_true",
+        default=False,
         help="Build with LLVM/Clang toolchain"
+    )
+    parser.add_argument(
+        "--cheri",
+        action="store_true",
+        default=False,
+        help="Build with CHERI support"
     )
     args = parser.parse_args()
 
@@ -92,6 +99,7 @@ def main():
     make_env["MICROKIT_SDK"] = str(release)
     make_env["MICROKIT_TOOL"] = (CWD / "tool/microkit/target/release/microkit").absolute()
     make_env["LLVM"] = str(args.llvm)
+    make_env["CHERI"] = str(args.cheri)
 
     # Choose the makefile based on the `--example-from-sdk` command line flag
     makefile_directory = (
