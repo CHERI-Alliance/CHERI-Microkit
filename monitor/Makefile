@@ -31,6 +31,10 @@ else
   CFLAGS_TOOLCHAIN := -Wno-maybe-uninitialized
 endif
 
+ifndef CHERI
+CHERI = False
+endif
+
 ifeq ($(ARCH),aarch64)
 	CFLAGS_ARCH := -mcpu=$(GCC_CPU)
 	ASM_CPP_FLAGS := -x assembler-with-cpp -c -g -mcpu=$(GCC_CPU)
@@ -45,6 +49,10 @@ else ifeq ($(ARCH),riscv64)
 	ARCH_DIR := riscv
 else
 	$(error ARCH is unsupported)
+endif
+
+ifeq ($(CHERI),True)
+  CFLAGS_ARCH := $(CFLAGS_ARCH) -DCONFIG_HAVE_CHERI
 endif
 
 CFLAGS := -std=gnu11 -g -O3 -nostdlib -ffreestanding -Wall $(CFLAGS_TOOLCHAIN) -Werror -I$(SEL4_SDK)/include $(CFLAGS_ARCH) -DARCH_$(ARCH)
