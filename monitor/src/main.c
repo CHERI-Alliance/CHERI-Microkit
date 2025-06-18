@@ -652,10 +652,113 @@ static unsigned perform_invocation(seL4_Word *invocation_data, unsigned offset, 
     return next_offset;
 }
 
-static void print_tcb_registers(seL4_UserContext *regs)
+static void print_tcb_registers(seL4_UserContext *regs, seL4_Word tcb_cap)
 {
 #if defined(ARCH_riscv64)
     puts("Registers: \n");
+#if defined(CONFIG_HAVE_CHERI)
+    int reg_idx = 0;
+
+    puts("ddc : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, 35));
+    puts("\n");
+    puts("pcc : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cra : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("csp : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cgp : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs0 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs1 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs2 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs3 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs4 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs5 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs6 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs7 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs8 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs9 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs10 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("cs11 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ca0 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ca1 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ca2 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ca3 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ca4 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ca5 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ca6 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ca7 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ct0 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ct1 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ct2 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ct3 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ct4 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ct5 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ct6 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ctp : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+#else
     puts("pc : ");
     puthex64(regs->pc);
     puts("\n");
@@ -743,6 +846,7 @@ static void print_tcb_registers(seL4_UserContext *regs)
     puts("tp : ");
     puthex64(regs->tp);
     puts("\n");
+#endif
 #elif defined(ARCH_aarch64)
     puts("Registers: \n");
     puts("pc : ");
@@ -1002,7 +1106,7 @@ static void monitor(void)
             fail("error reading registers");
         }
 
-        print_tcb_registers(&regs);
+        print_tcb_registers(&regs, tcb_cap);
 
         switch (label) {
         case seL4_Fault_CapFault: {
