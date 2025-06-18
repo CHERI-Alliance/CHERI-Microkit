@@ -1,5 +1,6 @@
 /*
  * Copyright 2021, Breakaway Consulting Pty. Ltd.
+ * Copyright 2025, Capabilities Limited.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -156,8 +157,41 @@ void dump_untyped_info()
  * what fault happened. The FSR is the 'scause' register.
  */
 #ifdef ARCH_riscv64
+#if defined(CONFIG_HAVE_CHERI)
+static char *riscv_fsr_cheri_type_to_string(seL4_Word cheri_type)
+{
+    switch (cheri_type) {
+        case 0:
+            return "CHERI instruction fetch fault";
+        case 1:
+            return "CHERI data fault due to load, store or AMO";
+        case 2:
+            return "CHERI jump or branch fault";
+        default:
+            return "Unexpected CHERI fault type";
+    }
+}
+#endif
 static char *riscv_fsr_to_string(seL4_Word fsr)
 {
+#if defined(CONFIG_HAVE_CHERI)
+    if ((fsr >> 11) & 1) {
+        switch (fsr & 0xf) {
+            case 0:
+                return "Tag violation";
+            case 1:
+                return "Seal violation";
+            case 2:
+                return "Permission violation";
+            case 3:
+                return "Invalid address violation";
+            case 4:
+                return "Bounds violation";
+            default:
+                return "Unexpected CHERI fault";
+        }
+    }
+#endif
     switch (fsr) {
     case 0:
         return "Instruction address misaligned";
@@ -829,7 +863,15 @@ static void riscv_print_vm_fault()
     seL4_Word fault_addr = seL4_GetMR(seL4_VMFault_Addr);
     seL4_Word is_instruction = seL4_GetMR(seL4_VMFault_PrefetchFault);
     seL4_Word fsr = seL4_GetMR(seL4_VMFault_FSR);
+#if defined(CONFIG_HAVE_CHERI)
+    if ((fsr >> 11) & 0x1) {
+        puts("MON|ERROR: CHERI Security Violation: ip=");
+    } else {
+        puts("MON|ERROR: VMFault: ip=");
+    }
+#else
     puts("MON|ERROR: VMFault: ip=");
+#endif
     puthex64(ip);
     puts("  fault_addr=");
     puthex64(fault_addr);
@@ -840,6 +882,13 @@ static void riscv_print_vm_fault()
     puts("\n");
     puts("MON|ERROR: description of fault: ");
     puts(riscv_fsr_to_string(fsr));
+    puts("\n");
+#if defined(CONFIG_HAVE_CHERI)
+    if ((fsr >> 11) & 1) {
+        puts("MON|ERROR: CHERI fault type: ");
+        puts(riscv_fsr_cheri_type_to_string((fsr >> 4) & 0xf));
+    }
+#endif
     puts("\n");
 }
 #endif
