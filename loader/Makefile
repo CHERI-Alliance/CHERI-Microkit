@@ -39,16 +39,33 @@ ifeq ($(strip $(PRINTING)),)
 $(error PRINTING must be specified)
 endif
 
+ifndef CHERI
+CHERI := False
+endif
+
+ifeq ($(CHERI),True)
+ifeq ($(ARCH),riscv64)
+  # Only support building the loader in hybrid CHERI mode
+  # This is mainly to be able to construct and pass a valid, bounded, user-level
+  # entry PCC to the kernel, and this requires a CHERI toolchain/arch
+  ARCH_FLAGS := -march=rv64imac_zicsr_zifencei_zcherihybrid -mabi=lp64 -DCONFIG_HAVE_CHERI
+endif
+else
+ifeq ($(ARCH),riscv64)
+  ARCH_FLAGS := -march=rv64imac_zicsr_zifencei -mabi=lp64
+endif
+endif
+
 ifeq ($(ARCH),aarch64)
-	CFLAGS_AARCH64 := -DPHYSICAL_ADDRESS_BITS=$(PHYSICAL_ADDRESS_BITS) -mcpu=$(GCC_CPU) -mgeneral-regs-only
-	CFLAGS_ARCH := $(CFLAGS_AARCH64) -DARCH_aarch64
-	ASM_FLAGS_ARCH := -DPHYSICAL_ADDRESS_BITS=$(PHYSICAL_ADDRESS_BITS) -mcpu=$(GCC_CPU)
-	ARCH_DIR := aarch64
+  CFLAGS_AARCH64 := -DPHYSICAL_ADDRESS_BITS=$(PHYSICAL_ADDRESS_BITS) -mcpu=$(GCC_CPU) -mgeneral-regs-only
+  CFLAGS_ARCH := $(CFLAGS_AARCH64) -DARCH_aarch64
+  ASM_FLAGS_ARCH := -DPHYSICAL_ADDRESS_BITS=$(PHYSICAL_ADDRESS_BITS) -mcpu=$(GCC_CPU)
+  ARCH_DIR := aarch64
 else ifeq ($(ARCH),riscv64)
-	CFLAGS_RISCV64 := -mcmodel=medany -march=rv64imac_zicsr_zifencei -mabi=lp64
-	CFLAGS_ARCH := $(CFLAGS_RISCV64) -DARCH_riscv64
-	ASM_FLAGS_ARCH := -march=rv64imac_zicsr_zifencei -mabi=lp64 -DFIRST_HART_ID=$(FIRST_HART_ID)
-	ARCH_DIR := riscv
+  CFLAGS_RISCV64 := -mcmodel=medany $(ARCH_FLAGS)
+  CFLAGS_ARCH := $(CFLAGS_RISCV64) -DARCH_riscv64
+  ASM_FLAGS_ARCH := $(ARCH_FLAGS) -DFIRST_HART_ID=$(FIRST_HART_ID)
+  ARCH_DIR := riscv
 endif
 
 CFLAGS := -std=gnu11 -g -O3 -nostdlib -ffreestanding $(CFLAGS_ARCH) -DBOARD_$(BOARD) -DPRINTING=$(PRINTING) -Wall -Werror -Wno-unused-function

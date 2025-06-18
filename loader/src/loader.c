@@ -1,5 +1,6 @@
 /*
  * Copyright 2021, Breakaway Consulting Pty. Ltd.
+ * Copyright 2025, Capabilities Limited.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -40,6 +41,8 @@ _Static_assert(sizeof(uintptr_t) == 8 || sizeof(uintptr_t) == 4, "Expect uintptr
 #define REGION_TYPE_ZERO 2
 
 #define FLAG_SEL4_HYP (1UL << 0)
+#define FLAG_SEL4_CHERI (1UL << 1)
+#define FLAG_SEL4_CHERI_MONITOR_MODE (1UL << 2)
 
 enum el {
     EL0 = 0,
@@ -64,6 +67,7 @@ struct loader_data {
     uintptr_t ui_p_reg_end;
     uintptr_t pv_offset;
     uintptr_t v_entry;
+    uintptr_t v_entry_size;
     uintptr_t extra_device_addr_p;
     uintptr_t extra_device_size;
 
@@ -75,7 +79,11 @@ typedef void (*sel4_entry)(
     uintptr_t ui_p_reg_start,
     uintptr_t ui_p_reg_end,
     intptr_t pv_offset,
+#if defined(CONFIG_HAVE_CHERI)
+    void *__capability v_entry,
+#else
     uintptr_t v_entry,
+#endif
     uintptr_t dtb_addr_p,
     uintptr_t dtb_size,
     uintptr_t extra_device_addr_p,
@@ -537,6 +545,16 @@ static void print_flags(void)
     if (loader_data->flags & FLAG_SEL4_HYP) {
         puts("             seL4 configured as hypervisor\n");
     }
+
+    if (loader_data->flags & FLAG_SEL4_CHERI) {
+        puts("             seL4 configured with CHERI support\n");
+
+        if (loader_data->flags & FLAG_SEL4_CHERI_MONITOR_MODE) {
+            puts("             Monitor is a purecap CHERI ELF\n");
+        } else {
+            puts("             Monitor is a legacy/hybrid CHERI ELF\n");
+        }
+    }
 }
 
 static void print_loader_data(void)
@@ -642,13 +660,75 @@ static int ensure_correct_el(void)
 }
 #endif
 
+#if defined(CONFIG_HAVE_CHERI) && defined(ARCH_riscv64)
+static inline void *__capability CheriArch_get_pcc(void)
+{
+    void *__capability pcc;
+    /* cheriTODO: use a compiler builtin once supported */
+    asm volatile("modesw.cap       \n"
+                 ".option push     \n"
+                 ".option capmode  \n"
+                 "auipc %0, 0      \n"
+                 ".option pop      \n"
+                 "modesw.int       \n"
+                 :"=C"(pcc)::);
+    return pcc;
+}
+
+static inline void *__capability CheriArch_create_ventry()
+{
+    /* We need to build a valid pointer capability for the user's entry and pass
+     * it to the kernel which will jump to it if running on a CHERI hardware
+     */
+
+    /* Derive a new capability from the current PCC (almighty) and the capability address
+     * to the user's ELF's entry address.
+     */
+    void *__capability v_entry =  __builtin_cheri_address_set(CheriArch_get_pcc(), loader_data->v_entry);
+
+    if (loader_data->flags & FLAG_SEL4_CHERI_MONITOR_MODE) {
+        /* The monitor's ELF is purecap, bound the monitor's PCC */
+        v_entry = __builtin_cheri_bounds_set(v_entry, (size_t) loader_data->v_entry_size);
+
+        /* Set the run-time mode to capability mode */
+        v_entry = __builtin_cheri_flags_set(v_entry, 0);
+    } else { /* The monitor's ELF is legacy/hybrid mode */
+        /* Set the run-time mode to integer/hybrid mode */
+        v_entry = __builtin_cheri_flags_set(v_entry, 1);
+    }
+
+    /* Remove Write and ASR permissions from the monitor's pointer capability.
+     * Also remove the ability to save/restore tagged CHERI capabilities.
+     * Right now we don't allow the monitor to be using any CHERI capabilities
+     * in memory and it's configured to be purely non-CHERI, even not hybrid.
+     */
+    v_entry = __builtin_cheri_perms_and(v_entry,
+        ~(__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__
+          | __CHERI_CAP_PERMISSION_WRITE__
+          | __CHERI_CAP_PERMISSION_CAPABILITY__));
+
+    /* Finally, seal entry the code pointer for the user pointer capability */
+    v_entry = __builtin_cheri_seal_entry(v_entry);
+
+    return v_entry;
+
+}
+/* cheriTODO: Implement it for Morello */
+#endif
+
 static void start_kernel(void)
 {
+#if defined(CONFIG_HAVE_CHERI)
+    void *__capability v_entry = CheriArch_create_ventry();
+#else
+    uintptr_t v_entry = loader_data->v_entry;
+#endif
+
     ((sel4_entry)(loader_data->kernel_entry))(
         loader_data->ui_p_reg_start,
         loader_data->ui_p_reg_end,
         loader_data->pv_offset,
-        loader_data->v_entry,
+        v_entry,
         0,
         0,
         loader_data->extra_device_addr_p,
