@@ -376,6 +376,14 @@ impl ElfFile {
         }
     }
 
+    pub fn code_segments(&self) -> Vec<&ElfSegment> {
+        self.segments.iter().filter(|s| s.loadable && s.is_executable() && !s.is_writable()).collect()
+    }
+
+    pub fn data_segments(&self) -> Vec<&ElfSegment> {
+        self.segments.iter().filter(|s| s.loadable && s.is_writable()).collect()
+    }
+
     pub fn loadable_segments(&self) -> Vec<&ElfSegment> {
         self.segments.iter().filter(|s| s.loadable).collect()
     }
