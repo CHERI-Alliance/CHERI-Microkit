@@ -142,7 +142,7 @@ pub enum SysSetVarKind {
     // we do not have access to the memory region yet. The size is resolved
     // when we actually need to perform the setvar.
     Size { mr: String },
-    Vaddr { address: u64 },
+    Vaddr { address: u64, mr: String },
     Paddr { region: String },
 }
 
@@ -536,7 +536,7 @@ impl ProtectionDomain {
 
                         setvars.push(SysSetVar {
                             symbol: setvar_vaddr.to_string(),
-                            kind: SysSetVarKind::Vaddr { address: map.vaddr },
+                            kind: SysSetVarKind::Vaddr { address: map.vaddr, mr: map.mr.clone() },
                         });
                     }
 

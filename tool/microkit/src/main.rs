@@ -2765,7 +2765,7 @@ fn build_system(
                             .unwrap()
                             .size
                     }
-                    sdf::SysSetVarKind::Vaddr { address } => *address,
+                    sdf::SysSetVarKind::Vaddr { address, mr } => *address,
                     sdf::SysSetVarKind::Paddr { region } => {
                         let mr = system
                             .memory_regions
