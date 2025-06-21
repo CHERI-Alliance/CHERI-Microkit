@@ -3273,6 +3273,7 @@ fn main() -> Result<(), String> {
         init_cnode_bits: json_str_as_u64(&kernel_config_json, "ROOT_CNODE_SIZE_BITS")?,
         cap_address_bits: 64,
         fan_out_limit: json_str_as_u64(&kernel_config_json, "RETYPE_FAN_OUT_LIMIT")?,
+        cheri: json_str_as_bool(&kernel_config_json, "HAVE_CHERI")?,
         hypervisor,
         benchmark: args.config == "benchmark",
         fpu: json_str_as_bool(&kernel_config_json, "HAVE_FPU")?,

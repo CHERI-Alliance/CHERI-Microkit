@@ -16,6 +16,7 @@ const DEFAULT_KERNEL_CONFIG: sel4::Config = sel4::Config {
     init_cnode_bits: 12,
     cap_address_bits: 64,
     fan_out_limit: 256,
+    cheri: false,
     hypervisor: true,
     benchmark: false,
     fpu: true,
