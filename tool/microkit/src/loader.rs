@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 //
 
-use crate::elf::ElfFile;
+use crate::elf::{ElfFile, ElfFlagsRiscv, ElfFlagsAArch64};
 use crate::sel4::{Arch, Config};
 use crate::util::{kb, mask, mb, round_up, struct_to_bytes};
 use crate::MemoryRegion;
@@ -260,6 +260,7 @@ impl<'a> Loader<'a> {
         assert!(ui_p_reg_end > ui_p_reg_start);
 
         let v_entry = initial_task_elf.entry;
+        let elf_flags = initial_task_elf.flags;
 
         let extra_device_addr_p = reserved_region.base;
         let extra_device_size = reserved_region.size();
@@ -275,9 +276,14 @@ impl<'a> Loader<'a> {
         all_regions_with_loader.push((image_vaddr, &image));
         check_non_overlapping(&all_regions_with_loader);
 
-        let flags = match config.hypervisor {
-            true => 1,
-            false => 0,
+        let mut flags = if config.hypervisor {1} else {0};
+        // Tell the run-time C loader that we're CHERI-enabled
+        flags |= if config.cheri {1 << 1} else {0};
+
+        // Tell the run-time C loader that whether the monitor is purecap/capmode
+        flags |= match config.arch {
+            Arch::Aarch64 => if (elf_flags & ElfFlagsAArch64::EfAarch64CheriPurecap as u64) != 0 {1 << 2} else {0},
+            Arch::Riscv64 => if (elf_flags & ElfFlagsRiscv::EfRiscvCapMode as u64) != 0 {1 << 2} else {0},
         };
 
         let mut region_metadata = Vec::new();
