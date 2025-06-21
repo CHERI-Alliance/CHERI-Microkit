@@ -54,6 +54,8 @@ impl Riscv64 {
 
     const PTE_PPN0_SHIFT: u64 = 10;
 
+    const PTE_CHERI_CW: u64 = 0x1 << 60; /* Capability Write (and Read). */
+
     /// Due to RISC-V having various virtual memory setups, we have this generic function to
     /// figure out the page-table index given the total number of page table levels for the
     /// platform and which level we are currently looking at.
@@ -74,7 +76,7 @@ impl Riscv64 {
     }
 
     pub fn pte_leaf(addr: u64) -> u64 {
-        Self::pte_ppn(addr) | Self::PTE_TYPE_BITS | Self::PTE_TYPE_VALID
+        Self::pte_ppn(addr) | Self::PTE_CHERI_CW | Self::PTE_TYPE_BITS | Self::PTE_TYPE_VALID
     }
 }
 

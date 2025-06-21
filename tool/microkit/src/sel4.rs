@@ -336,6 +336,7 @@ pub enum ArmVmAttributes {
 #[repr(u64)]
 pub enum RiscvVmAttributes {
     ExecuteNever = 1,
+    CheriCapWrite = 0x1 << 60
 }
 
 impl ArmVmAttributes {
@@ -348,7 +349,7 @@ impl ArmVmAttributes {
 impl RiscvVmAttributes {
     #[allow(clippy::should_implement_trait)] // Default::default would return Self, not u64
     pub fn default() -> u64 {
-        0
+        RiscvVmAttributes::CheriCapWrite as u64
     }
 }
 

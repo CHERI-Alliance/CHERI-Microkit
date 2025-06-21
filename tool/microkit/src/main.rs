@@ -1828,6 +1828,14 @@ fn build_system(
                     }
                 }
 
+                /* Enable CHERI capability reads/writes by default. */
+                if config.cheri {
+                    match config.arch {
+                        Arch::Aarch64 => {}, // cheriTODO: Support Morello
+                        Arch::Riscv64 => attrs |= RiscvVmAttributes::CheriCapWrite as u64,
+                    }
+                }
+
                 assert!(!mr_pages[mr].is_empty());
                 assert!(util::objects_adjacent(&mr_pages[mr]));
 
