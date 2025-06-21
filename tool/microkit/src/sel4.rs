@@ -1,5 +1,6 @@
 //
 // Copyright 2024, UNSW
+// Copyright 2025, Capabilities Limited
 //
 // SPDX-License-Identifier: BSD-2-Clause
 //
@@ -389,6 +390,8 @@ enum InvocationLabel {
     // TCB
     TCBReadRegisters,
     TCBWriteRegisters,
+    CheriWriteRegister,
+    CheriWriteMemoryCap,
     TCBCopyRegisters,
     TCBConfigure,
     TCBSetPriority,
@@ -937,6 +940,56 @@ impl Invocation {
 
                 (tcb, &cap_lookup[&tcb])
             }
+            InvocationArgs::CheriWriteRegister{
+                tcb,
+                vspace_root,
+                reg_idx,
+                cheri_base,
+                cheri_addr,
+                cheri_size,
+                cheri_meta
+            } => {
+                arg_strs.push(Invocation::fmt_field_cap(
+                    "vspace_root",
+                    vspace_root,
+                    cap_lookup,
+                ));
+                arg_strs.push(Invocation::fmt_field("reg_idx", reg_idx as u64));
+                arg_strs.push(Invocation::fmt_field("cheri_base", cheri_base));
+                arg_strs.push(Invocation::fmt_field("cheri_addr", cheri_addr));
+                arg_strs.push(Invocation::fmt_field("cheri_size", cheri_size));
+                arg_strs.push(Invocation::fmt_field("cheri_meta", cheri_meta));
+
+                (tcb, &cap_lookup[&tcb])
+            }
+            InvocationArgs::CheriWriteMemoryCap{
+                tcb,
+                vspace_root,
+                page,
+                vaddr,
+                cheri_base,
+                cheri_addr,
+                cheri_size,
+                cheri_meta
+            } => {
+                arg_strs.push(Invocation::fmt_field_cap(
+                    "vspace_root",
+                    vspace_root,
+                    cap_lookup,
+                ));
+                arg_strs.push(Invocation::fmt_field_cap(
+                    "page",
+                    page,
+                    cap_lookup,
+                ));
+                arg_strs.push(Invocation::fmt_field("vaddr", vaddr as u64));
+                arg_strs.push(Invocation::fmt_field("cheri_base", cheri_base));
+                arg_strs.push(Invocation::fmt_field("cheri_addr", cheri_addr));
+                arg_strs.push(Invocation::fmt_field("cheri_size", cheri_size));
+                arg_strs.push(Invocation::fmt_field("cheri_meta", cheri_meta));
+
+                (tcb, &cap_lookup[&tcb])
+            }
             InvocationArgs::TcbBindNotification { tcb, notification } => {
                 arg_strs.push(Invocation::fmt_field_cap(
                     "notification",
@@ -1087,6 +1140,8 @@ impl Invocation {
             | InvocationLabel::TCBSetIPCBuffer
             | InvocationLabel::TCBResume
             | InvocationLabel::TCBWriteRegisters
+            | InvocationLabel::CheriWriteRegister
+            | InvocationLabel::CheriWriteMemoryCap
             | InvocationLabel::TCBBindNotification => "TCB",
             InvocationLabel::ARMASIDPoolAssign | InvocationLabel::RISCVASIDPoolAssign => {
                 "ASID Pool"
@@ -1114,6 +1169,8 @@ impl Invocation {
             InvocationLabel::TCBSetIPCBuffer => "SetIPCBuffer",
             InvocationLabel::TCBResume => "Resume",
             InvocationLabel::TCBWriteRegisters => "WriteRegisters",
+            InvocationLabel::CheriWriteRegister => "CheriWriteRegister",
+            InvocationLabel::CheriWriteMemoryCap=> "CheriWriteMemoryCap",
             InvocationLabel::TCBBindNotification => "BindNotification",
             InvocationLabel::ARMASIDPoolAssign | InvocationLabel::RISCVASIDPoolAssign => "Assign",
             InvocationLabel::ARMIRQIssueIRQHandlerTrigger
@@ -1144,6 +1201,8 @@ impl InvocationArgs {
             InvocationArgs::TcbSetIpcBuffer { .. } => InvocationLabel::TCBSetIPCBuffer,
             InvocationArgs::TcbResume { .. } => InvocationLabel::TCBResume,
             InvocationArgs::TcbWriteRegisters { .. } => InvocationLabel::TCBWriteRegisters,
+            InvocationArgs::CheriWriteRegister { .. } => InvocationLabel::CheriWriteRegister,
+            InvocationArgs::CheriWriteMemoryCap { .. } => InvocationLabel::CheriWriteMemoryCap,
             InvocationArgs::TcbBindNotification { .. } => InvocationLabel::TCBBindNotification,
             InvocationArgs::AsidPoolAssign { .. } => match config.arch {
                 Arch::Aarch64 => InvocationLabel::ARMASIDPoolAssign,
@@ -1242,6 +1301,29 @@ impl InvocationArgs {
                 let regs_values = regs.into_iter().map(|(_, value)| value);
                 args.extend(regs_values);
                 (tcb, args, vec![])
+            }
+            InvocationArgs::CheriWriteRegister {
+                tcb,
+                vspace_root,
+                reg_idx,
+                cheri_base,
+                cheri_addr,
+                cheri_size,
+                cheri_meta,
+            } => {
+                (tcb, vec![reg_idx, cheri_base, cheri_addr, cheri_size, cheri_meta], vec![vspace_root])
+            }
+            InvocationArgs::CheriWriteMemoryCap {
+                tcb,
+                vspace_root,
+                page,
+                vaddr,
+                cheri_base,
+                cheri_addr,
+                cheri_size,
+                cheri_meta,
+            } => {
+                (tcb, vec![vaddr, cheri_base, cheri_addr, cheri_size, cheri_meta], vec![vspace_root, page])
             }
             InvocationArgs::TcbBindNotification { tcb, notification } => {
                 (tcb, vec![], vec![notification])
@@ -1366,6 +1448,25 @@ pub enum InvocationArgs {
         arch_flags: u8,
         count: u64,
         regs: Vec<(&'static str, u64)>,
+    },
+    CheriWriteRegister {
+        tcb: u64,
+        vspace_root: u64,
+        reg_idx: u64,
+        cheri_base: u64,
+        cheri_addr: u64,
+        cheri_size: u64,
+        cheri_meta: u64,
+    },
+    CheriWriteMemoryCap {
+        tcb: u64,
+        vspace_root: u64,
+        page: u64,
+        vaddr: u64,
+        cheri_base: u64,
+        cheri_addr: u64,
+        cheri_size: u64,
+        cheri_meta: u64,
     },
     TcbBindNotification {
         tcb: u64,
