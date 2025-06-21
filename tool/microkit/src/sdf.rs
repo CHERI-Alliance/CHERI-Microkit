@@ -76,6 +76,7 @@ pub enum SysMapPerms {
     Read = 1,
     Write = 2,
     Execute = 4,
+    Cheri = 8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -243,6 +244,7 @@ impl SysMapPerms {
                 'r' => perms |= SysMapPerms::Read as u8,
                 'w' => perms |= SysMapPerms::Write as u8,
                 'x' => perms |= SysMapPerms::Execute as u8,
+                'C' => perms |= SysMapPerms::Cheri as u8,
                 _ => return Err(()),
             }
         }
@@ -283,7 +285,7 @@ impl SysMap {
                     return Err(value_error(
                         xml_sdf,
                         node,
-                        "perms must only be a combination of 'r', 'w', and 'x'".to_string(),
+                        "perms must only be a combination of 'r', 'w', 'x', and 'C'".to_string(),
                     ))
                 }
             }
