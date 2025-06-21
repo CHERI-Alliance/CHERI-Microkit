@@ -116,6 +116,7 @@ struct LoaderHeader64 {
     ui_p_reg_end: u64,
     pv_offset: u64,
     v_entry: u64,
+    v_entry_size: u64,
     extra_device_addr_p: u64,
     extra_device_size: u64,
     num_regions: u64,
@@ -262,6 +263,16 @@ impl<'a> Loader<'a> {
         let v_entry = initial_task_elf.entry;
         let elf_flags = initial_task_elf.flags;
 
+        /* The current monitor's ELF is configured and built to only have one RWE segment
+         * for code, data, and everything else. So just pass the entire size of this
+         * segment to the run-time loader to build a capability for if/when it needs
+         * to be built as a purecap monitor.
+         * XXX Currently the monitor is built without CHERI toolchain/flags at all.
+         * So we don't even need to pass a size and v_entry will always be in integer
+         * mode. If that changes, the following size will be utilised and could be refined.
+         */
+        let v_entry_size = initial_task_elf.loadable_segments()[0].data.len() as u64;
+
         let extra_device_addr_p = reserved_region.base;
         let extra_device_size = reserved_region.size();
 
@@ -312,6 +323,7 @@ impl<'a> Loader<'a> {
             ui_p_reg_end,
             pv_offset,
             v_entry,
+            v_entry_size,
             extra_device_addr_p,
             extra_device_size,
             num_regions: all_regions.len() as u64,
