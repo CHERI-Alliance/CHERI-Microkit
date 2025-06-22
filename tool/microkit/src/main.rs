@@ -7,6 +7,8 @@
 // we want our asserts, even if the compiler figures out they hold true already during compile-time
 #![allow(clippy::assertions_on_constants)]
 
+mod cheri;
+
 use elf::ElfFile;
 use loader::Loader;
 use microkit_tool::{
@@ -2431,46 +2433,46 @@ fn build_system(
     }
 
     // Now map all the pages
-    for (page_cap_address, pd_idx, vaddr, rights, attr, count, vaddr_incr) in pd_page_descriptors {
+    for (page_cap_address, pd_idx, vaddr, rights, attr, count, vaddr_incr) in &pd_page_descriptors {
         let mut invocation = Invocation::new(
             config,
             InvocationArgs::PageMap {
-                page: page_cap_address,
-                vspace: pd_vspace_objs[pd_idx].cap_addr,
-                vaddr,
-                rights,
-                attr,
+                page: *page_cap_address,
+                vspace: pd_vspace_objs[*pd_idx].cap_addr,
+                vaddr: *vaddr,
+                rights: *rights,
+                attr: *attr,
             },
         );
         invocation.repeat(
-            count as u32,
+            *count as u32,
             InvocationArgs::PageMap {
                 page: 1,
                 vspace: 0,
-                vaddr: vaddr_incr,
+                vaddr: *vaddr_incr,
                 rights: 0,
                 attr: 0,
             },
         );
         system_invocations.push(invocation);
     }
-    for (page_cap_address, vm_idx, vaddr, rights, attr, count, vaddr_incr) in vm_page_descriptors {
+    for (page_cap_address, vm_idx, vaddr, rights, attr, count, vaddr_incr) in &vm_page_descriptors {
         let mut invocation = Invocation::new(
             config,
             InvocationArgs::PageMap {
-                page: page_cap_address,
-                vspace: vm_vspace_objs[vm_idx].cap_addr,
-                vaddr,
-                rights,
-                attr,
+                page: *page_cap_address,
+                vspace: vm_vspace_objs[*vm_idx].cap_addr,
+                vaddr: *vaddr,
+                rights: *rights,
+                attr: *attr,
             },
         );
         invocation.repeat(
-            count as u32,
+            *count as u32,
             InvocationArgs::PageMap {
                 page: 1,
                 vspace: 0,
-                vaddr: vaddr_incr,
+                vaddr: *vaddr_incr,
                 rights: 0,
                 attr: 0,
             },
@@ -2497,6 +2499,24 @@ fn build_system(
                 attr: ipc_buffer_attr,
             },
         ));
+
+        // Construct and write IPC Buffer pointer capability
+        if config.cheri {
+            let map_perms = SysMapPerms::Read as u8 | SysMapPerms::Write as u8;
+            cheri::cheri_arch_write_sym_cap(
+                config,
+                &mut system_invocations,
+                &pd_page_descriptors,
+                &pd_elf_files[pd_idx],
+                "__sel4_ipc_buffer_cap",
+                pd_idx,
+                tcb_objs[pd_idx].cap_addr,
+                vspace_objs[pd_idx].cap_addr,
+                vaddr,
+                4096,
+                map_perms
+            );
+        }
     }
 
     // Initialise the TCBs
@@ -2662,8 +2682,38 @@ fn build_system(
         ));
     }
 
+    let pd_setvar_values: Vec<Vec<u64>> = system
+        .protection_domains
+        .iter()
+        .map(|pd| {
+            pd.setvars
+                .iter()
+                .map(|setvar| match &setvar.kind {
+                    sdf::SysSetVarKind::Size { mr } => {
+                        system
+                            .memory_regions
+                            .iter()
+                            .find(|m| m.name == *mr)
+                            .unwrap()
+                            .size
+                    }
+                    sdf::SysSetVarKind::Vaddr { address, .. } => *address,
+                    sdf::SysSetVarKind::Paddr { region } => {
+                        let mr = system
+                            .memory_regions
+                            .iter()
+                            .find(|mr| mr.name == *region)
+                            .unwrap_or_else(|| panic!("Cannot find region: {}", region));
+
+                        mr_pages[mr][0].phys_addr
+                    }
+                })
+                .collect()
+        })
+        .collect();
+
     // Set TCB registers (we only set the entry point)
-    for pd_idx in 0..system.protection_domains.len() {
+    for (pd_idx, pd) in system.protection_domains.iter().enumerate() {
         let regs = match config.arch {
             Arch::Aarch64 => Aarch64Regs {
                 pc: pd_elf_files[pd_idx].entry,
@@ -2691,6 +2741,57 @@ fn build_system(
                 regs,
             },
         ));
+
+        if config.cheri {
+            cheri::cheri_arch_tcb_init_reg_context(
+                config,
+                &mut system_invocations,
+                tcb_objs[pd_idx].cap_addr,
+                vspace_objs[pd_idx].cap_addr,
+                pd.stack_size,
+                &pd_elf_files[pd_idx]);
+
+            /* Patch all setvar_vaddr ELF symbols with CHERI caps correspoding to their MRs */
+            for (setvar_idx, setvar) in pd.setvars.iter().enumerate() {
+                /* CHERI cap's address */
+                let value = pd_setvar_values[pd_idx][setvar_idx];
+
+                /* Get the associated memory mapped region's name for this setvar */
+                let mr_name = match &setvar.kind {
+                    sdf::SysSetVarKind::Vaddr { address:_ , mr } => mr.clone(),
+                    _ => "".to_string()
+                };
+
+                /* Search for the actual memory region by name */
+                let mr = system
+                        .memory_regions
+                        .iter()
+                        .find(|m| m.name == mr_name);
+
+                let size = mr.map(|region| region.size).unwrap_or(0);
+
+                /* Search for the memory mapped permissions for this setvar */
+                let mmapped = &pd.maps
+                    .iter()
+                    .find(|m| m.mr == mr_name);
+                let perms = mmapped.map(|region| region.perms).unwrap_or(0);
+
+                /* Generate an invocation to write a CHERI cap to this setvar_vaddr */
+                cheri::cheri_arch_write_sym_cap(
+                    config,
+                    &mut system_invocations,
+                    &pd_page_descriptors,
+                    &pd_elf_files[pd_idx],
+                    &setvar.symbol,
+                    pd_idx,
+                    tcb_objs[pd_idx].cap_addr,
+                    vspace_objs[pd_idx].cap_addr,
+                    value,
+                    size,
+                    perms
+                );
+            }
+        }
     }
     // AArch64 and RISC-V expect the stack pointer to be 16-byte aligned
     assert!(config.pd_stack_top() % 16 == 0);
@@ -2757,36 +2858,6 @@ fn build_system(
     for system_invocation in &system_invocations {
         system_invocation.add_raw_invocation(config, &mut system_invocation_data);
     }
-
-    let pd_setvar_values: Vec<Vec<u64>> = system
-        .protection_domains
-        .iter()
-        .map(|pd| {
-            pd.setvars
-                .iter()
-                .map(|setvar| match &setvar.kind {
-                    sdf::SysSetVarKind::Size { mr } => {
-                        system
-                            .memory_regions
-                            .iter()
-                            .find(|m| m.name == *mr)
-                            .unwrap()
-                            .size
-                    }
-                    sdf::SysSetVarKind::Vaddr { address, mr } => *address,
-                    sdf::SysSetVarKind::Paddr { region } => {
-                        let mr = system
-                            .memory_regions
-                            .iter()
-                            .find(|mr| mr.name == *region)
-                            .unwrap_or_else(|| panic!("Cannot find region: {}", region));
-
-                        mr_pages[mr][0].phys_addr
-                    }
-                })
-                .collect()
-        })
-        .collect();
 
     Ok(BuiltSystem {
         number_of_system_caps: final_cap_slot,
