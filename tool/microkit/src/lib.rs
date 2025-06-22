@@ -8,6 +8,7 @@ pub mod elf;
 pub mod loader;
 pub mod sdf;
 pub mod sel4;
+pub mod cheri;
 pub mod util;
 
 use sel4::Config;
