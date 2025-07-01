@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause
 //
-use crate::elf::{ElfFile, ElfFlagsRiscv};
+use crate::elf::{ElfFile, ElfFlagsRiscv, ElfFlagsAArch64};
 use crate::sel4::{Arch, Config, Invocation, InvocationArgs};
 use crate::sdf::SysMapPerms;
 use crate::util::round_down;
@@ -78,6 +78,17 @@ impl CheriRiscv64CapPermissions {
     pub const PERMIT_LOAD: u32 = 1 << 18;
 }
 
+fn is_purecap(arch: &Arch, elf: &ElfFile) -> bool {
+    match arch {
+        Arch::Aarch64 => {
+            (elf.flags & (ElfFlagsAArch64::EfAarch64CheriPurecap as u64)) != 0
+        }
+        Arch::Riscv64 => {
+            (elf.flags & (ElfFlagsRiscv::EfRiscvCapMode as u64)) != 0
+        }
+    }
+}
+
 fn cheri_riscv_tcb_init_reg_context(
     config: &Config,
     system_invocations: &mut Vec<Invocation>,
@@ -86,9 +97,7 @@ fn cheri_riscv_tcb_init_reg_context(
     stack_size: u64,
     pd_elf_file: &ElfFile,
 ) {
-    let purecap = (pd_elf_file.flags & (ElfFlagsRiscv::EfRiscvCapMode as u64)) != 0;
-
-    if purecap {
+    if is_purecap(&config.arch, pd_elf_file) {
         let code_segments = pd_elf_file.code_segments();
         let data_segments = pd_elf_file.data_segments();
 
@@ -259,9 +268,7 @@ fn cheri_riscv_write_sym_cap(
     size: u64,
     map_perms: u8,
 ) {
-    let purecap = (pd_elf_file.flags & (ElfFlagsRiscv::EfRiscvCapMode as u64)) != 0;
-
-    if purecap {
+    if is_purecap(&config.arch, pd_elf_file) {
         let mut meta = CheriRiscv64CapMeta::new();
         let mut cap_perms = 0;
 
@@ -314,33 +321,35 @@ pub fn cheri_arch_write_sym_cap(
     size: u64,
     map_perms: u8,
 ) {
-    let (sym_vaddr, _) = pd_elf_file
-        .find_symbol(sym)
-        .unwrap_or_else(|_| panic!("Could not find {}", sym));
-    let symbol_page = round_down(sym_vaddr, size);
+    if is_purecap(&config.arch, pd_elf_file) {
+        let (sym_vaddr, _) = pd_elf_file
+            .find_symbol(sym)
+            .unwrap_or_else(|_| panic!("Could not find {}", sym));
+        let symbol_page = round_down(sym_vaddr, 4096);
 
-    let page_cptr = pd_page_descriptors
-        .iter()
-        .find(|(_, pdidx, vaddr, _, _, _, _)| *vaddr == symbol_page && *pdidx == pd_idx)
-        .map(|(cap_cptr, _, _, _, _, _, _)| *cap_cptr)
-        .unwrap_or(0);
+        let page_cptr = pd_page_descriptors
+            .iter()
+            .find(|(_, pdidx, vaddr, _, _, _, _)| *vaddr == symbol_page && *pdidx == pd_idx)
+            .map(|(cap_cptr, _, _, _, _, _, _)| *cap_cptr)
+            .unwrap_or(0);
 
-    match config.arch {
-        Arch::Riscv64 => cheri_riscv_write_sym_cap(
-            config,
-            system_invocations,
-            pd_elf_file,
-            tcb_cptr,
-            vspace_cptr,
-            page_cptr,
-            sym_vaddr,
-            addr,
-            size,
-            map_perms,
-        ),
-        _ => {
-            eprintln!("Only CHERI-RISC-V 64-bit is supported at the moment");
-            std::process::exit(1);
+        match config.arch {
+            Arch::Riscv64 => cheri_riscv_write_sym_cap(
+                config,
+                system_invocations,
+                pd_elf_file,
+                tcb_cptr,
+                vspace_cptr,
+                page_cptr,
+                sym_vaddr,
+                addr,
+                size,
+                map_perms,
+            ),
+            _ => {
+                eprintln!("Only CHERI-RISC-V 64-bit is supported at the moment");
+                std::process::exit(1);
+            }
         }
     }
 }
