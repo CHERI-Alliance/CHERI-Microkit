@@ -2753,6 +2753,10 @@ fn build_system(
 
             /* Patch all setvar_vaddr ELF symbols with CHERI caps correspoding to their MRs */
             for (setvar_idx, setvar) in pd.setvars.iter().enumerate() {
+                if !matches!(setvar.kind, sdf::SysSetVarKind::Vaddr { address: _, mr: _ }) {
+                    continue;
+                }
+
                 /* CHERI cap's address */
                 let value = pd_setvar_values[pd_idx][setvar_idx];
 
