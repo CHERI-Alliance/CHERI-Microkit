@@ -1,0 +1,90 @@
+#
+# Copyright 2021, Breakaway Consulting Pty. Ltd.
+# Copyright 2025, Capabilities Limited
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+ifeq ($(strip $(BUILD_DIR)),)
+$(error BUILD_DIR must be specified)
+endif
+
+ifeq ($(strip $(ARCH)),)
+$(error ARCH must be specified)
+endif
+
+ifeq ($(strip $(TARGET_TRIPLE)),)
+$(error TARGET_TRIPLE must be specified)
+endif
+
+ifndef CHERI
+CHERI = False
+endif
+
+ifeq ($(strip $(LLVM)),True)
+  CC := clang -target $(TARGET_TRIPLE)
+  CPP := clang-cpp -target $(TARGET_TRIPLE)
+  AS := clang -target $(TARGET_TRIPLE)
+  LD := ld.lld
+  AR := llvm-ar
+  CFLAGS_TOOLCHAIN :=
+else
+  CC = $(TARGET_TRIPLE)-gcc
+  CPP = $(TARGET_TRIPLE)-cpp
+  AS = $(TARGET_TRIPLE)-as
+  LD = $(TARGET_TRIPLE)-ld
+  AR = $(TARGET_TRIPLE)-ar
+  CFLAGS_TOOLCHAIN := -Wno-maybe-uninitialized
+endif
+
+ifeq ($(CHERI),True)
+ifeq ($(ARCH),riscv64)
+  # Build in purecap CHERI ABI
+  ARCH_FLAGS := -march=rv64imafdc_zicsr_zcherihybrid -mabi=l64pc128d -DCONFIG_HAVE_CHERI
+endif
+else
+ifeq ($(ARCH),riscv64)
+  ARCH_FLAGS := -march=rv64imafdc_zicsr_zifencei -mabi=lp64d
+endif
+endif
+
+ifeq ($(ARCH),aarch64)
+  ASM_FLAGS := -mcpu=$(GCC_CPU) $(ARCH_FLAGS)
+  CFLAGS_AARCH64 := -mcpu=$(GCC_CPU) $(ARCH_FLAGS)
+  CFLAGS_ARCH := $(CFLAGS_AARCH64)
+  ARCH_DIR := aarch64
+else ifeq ($(ARCH),riscv64)
+  ASM_FLAGS := $(ARCH_FLAGS)
+  CFLAGS_RISCV64 := -mcmodel=medany $(ARCH_FLAGS)
+  CFLAGS_ARCH := $(CFLAGS_RISCV64)
+  ARCH_DIR := riscv
+endif
+
+CFLAGS := -std=gnu11 \
+		  -g -O3 -nostdlib \
+		  -ffreestanding \
+		  -Wall $(CFLAGS_TOOLCHAIN) \
+		  -Wno-unused-function -Werror \
+		  -Iinclude -I$(SEL4_SDK)/include \
+		  $(CFLAGS_ARCH)
+
+LIBS := libutils.a
+OBJS := util.o printf.o
+
+$(BUILD_DIR)/%.o : src/$(ARCH_DIR)/%.S
+	$(CC) -x assembler-with-cpp -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/%.o : src/$(ARCH_DIR)/%.s
+	$(AS) -c -g $(ASM_FLAGS) $< -o $@
+
+$(BUILD_DIR)/%.o : src/%.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+LIB = $(addprefix $(BUILD_DIR)/, $(LIBS))
+
+all: $(LIB)
+
+$(LIB): $(addprefix $(BUILD_DIR)/, $(OBJS))
+	$(AR) -rv $@ $^
+
+clean:
+	rm -f $(addprefix $(BUILD_DIR)/, $(OBJS))
