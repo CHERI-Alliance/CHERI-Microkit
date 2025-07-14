@@ -327,11 +327,32 @@ pub fn cheri_arch_write_sym_cap(
             .unwrap_or_else(|_| panic!("Could not find {}", sym));
         let symbol_page = round_down(sym_vaddr, 4096);
 
-        let page_cptr = pd_page_descriptors
+        // Try to find a page cap that exactly matches the symbol's virtual address
+        let mut page_cptr = pd_page_descriptors
             .iter()
             .find(|(_, pdidx, vaddr, _, _, _, _)| *vaddr == symbol_page && *pdidx == pd_idx)
             .map(|(cap_cptr, _, _, _, _, _, _)| *cap_cptr)
             .unwrap_or(0);
+
+        // Couldn't find a page cap for this symbol. Try to find a multipage region (MR) that contains it
+        if page_cptr == 0 {
+            let (first_page, vaddr, _, page_size_bytes) = pd_page_descriptors
+                .iter()
+                .find(|(_, pdidx, vaddr, _, _, count, page_size_bytes)| {
+                    *count > 1 &&
+                    (symbol_page >= *vaddr && symbol_page < *vaddr + *count * *page_size_bytes) &&
+                    *pdidx == pd_idx
+                })
+                .map(|(cap_cptr, _, vaddr, _, _, count, page_size_bytes)| {
+                    (*cap_cptr, *vaddr, *count, *page_size_bytes)
+                })
+                .unwrap_or((0, 0, 0, 0));
+
+            if first_page != 0 {
+                let page_idx = (symbol_page - vaddr) / page_size_bytes;
+                page_cptr = first_page + page_idx;
+            }
+        }
 
         match config.arch {
             Arch::Riscv64 => cheri_riscv_write_sym_cap(
