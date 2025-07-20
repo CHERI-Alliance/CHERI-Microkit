@@ -3,6 +3,12 @@
      SPDX-License-Identifier: CC-BY-SA-4.0
 -->
 
+# CHERI-Microkit
+CHERI-Microkit is a CHERI-enabled fork of Microkit. It adds CHERI extensions
+to enable running legacy C, C++, CHERI C/C++ (purecap), Rust, etc. protection
+domains on top of [CHERI-seL4](https://github.com/CHERI-Alliance/CHERI-seL4)
+microkernel all side-by-side.
+
 # seL4 Microkit
 
 The purpose of the seL4 Microkit is to enable system designers to create static software systems based on the seL4 microkernel.
