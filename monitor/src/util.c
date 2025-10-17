@@ -29,7 +29,29 @@
 #define __CHERI_CAP_PERMISSION_GLOBAL__ (1 << 4) /* CL bit */
 
 #define CHERI_OTYPE_SENTRY 1
-/* cheriTODO: Implement for Morello and other CHERI archs */
+
+#elif defined(__aarch64__)
+#define __CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__ 512
+#define __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__ 32768
+#define __CHERI_CAP_PERMISSION_LOAD_MUTABLE__ 64
+#define __CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__ 16384
+#define __CHERI_CAP_PERMISSION_PERMIT_LOAD__ 131072
+#define __CHERI_CAP_PERMISSION_USER_00__ (1u << 2u)
+#define __CHERI_CAP_PERMISSION_USER_01__ (1u << 3u)
+#define __CHERI_CAP_PERMISSION_USER_02__ (1u << 3u)
+#define __CHERI_CAP_PERMISSION_USER_03__ (1u << 5u)
+#define __CHERI_CAP_PERMISSION_VMEM__ __CHERI_CAP_PERMISSION_USER_00__
+#define __CHERI_CAP_PERMISSION_PERMIT_STORE__ 65536
+#define __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ 8192
+#define __CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__ 4096
+#define __CHERI_CAP_PERMISSION_PERMIT_SEAL__ 2048
+#define __CHERI_CAP_PERMISSION_PERMIT_UNSEAL__ 1024
+#define __CHERI_CAP_PERMISSION_GLOBAL__ 1
+#define __ARM_CAP_PERMISSION_BRANCH_SEALED_PAIR__ 256
+#define __ARM_CAP_PERMISSION_COMPARTMENT_ID__ 128
+#define __ARM_CAP_PERMISSION_EXECUTIVE__ 2
+
+#define CHERI_OTYPE_SENTRY -1
 #endif
 #endif
 
@@ -89,6 +111,8 @@ static inline char *fmt_x(uintmax_t x, char *s, int lower)
 void putchericap(seL4_TCB_CheriReadRegister_t cap) {
     char buf[CAP_BUFFER_SIZE];
     char *z = buf + sizeof(buf);
+    *--z = 0;
+
     struct CheriCapMeta cheri_meta = (struct CheriCapMeta) {.words[0] = cap.cheri_meta};
     int tag = CheriCapMeta_get_V(cheri_meta);
     seL4_Word perms = CheriCapMeta_get_AP(cheri_meta);
@@ -98,13 +122,16 @@ void putchericap(seL4_TCB_CheriReadRegister_t cap) {
     }
 
     /* Attributes */
-    const int type = CheriCapMeta_get_CT(cheri_meta);
 #if defined(__riscv)
-    /* cheriTODO: fix/implement for Morello when addded */
+    const int type = CheriCapMeta_get_CT(cheri_meta);
     const int is_capmode = !CheriCapMeta_get_M(cheri_meta);
+    const int is_sealed = 0;
+#elif defined(__aarch64__)
+    const int type = CheriCapMeta_get_T(cheri_meta);
+    const int is_capmode = cap.cheri_base & 0x1;
+    const int is_sealed = type != 0;
 #endif
     const int is_sentry = type == CHERI_OTYPE_SENTRY;
-    const int is_sealed = 0;
 
     if (is_sentry) { // sentry
         *--z = ')';
@@ -201,23 +228,6 @@ void putchericap(seL4_TCB_CheriReadRegister_t cap) {
      * fmt allows for additional formats to be specified and multiple formats to
      * be chained together.
      */
-#if defined(__aarch64__)
-    if (perms & __CHERI_CAP_PERMISSION_USER3__) {
-        *--z = '3';
-      }
-
-    if (perms & __CHERI_CAP_PERMISSION_USER2__) {
-        *--z = '2';
-    }
-
-    if (perms & __CHERI_CAP_PERMISSION_USER1__) {
-        *--z = '1';
-    }
-
-    if (perms & __CHERI_CAP_PERMISSION_VMEM__) {
-        *--z = 'V';
-    }
-#elif defined(__riscv)
     if (perms & __CHERI_CAP_PERMISSION_USER_03__) {
         *--z = '1';
     }
@@ -231,9 +241,12 @@ void putchericap(seL4_TCB_CheriReadRegister_t cap) {
     }
 
     if (perms & __CHERI_CAP_PERMISSION_USER_00__) {
+#if defined(__riscv)
         *--z = '1';
-    }
+#else
+        *--z = 'V';
 #endif
+    }
 
 #ifdef __ARM_CAP_PERMISSION_COMPARTMENT_ID__
     if (perms & __ARM_CAP_PERMISSION_COMPARTMENT_ID__) {
@@ -265,12 +278,6 @@ void putchericap(seL4_TCB_CheriReadRegister_t cap) {
     if (perms & __CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__) {
         *--z = 'S';
     }
-
-#ifdef __ARM_CAP_PERMISSION_MUTABLE_LOAD__
-    if (perms & __ARM_CAP_PERMISSION_MUTABLE_LOAD__) {
-        *--z = 'M';
-    }
-#endif
 
 #ifdef __CHERI_CAP_PERMISSION_LOAD_MUTABLE__
     if (perms & __CHERI_CAP_PERMISSION_LOAD_MUTABLE__) {

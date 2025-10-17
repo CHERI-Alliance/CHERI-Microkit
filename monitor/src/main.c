@@ -275,6 +275,12 @@ static char *ec_to_string(uintptr_t ec)
         return "SP alignment faultr exception";
     case 40:
         return "Trapped floating-point exception taken from AArch32 state";
+#if defined(CONFIG_HAVE_CHERI)
+    case 41:
+        return "Access to the Morello architecture";
+    case 42:
+        return "Trapped capability MSR or MRS instruction execution";
+#endif
     case 44:
         return "Trapped floating-point exception taken from AArch64 state";
     case 47:
@@ -354,6 +360,18 @@ static char *data_abort_dfsc_to_string(uintptr_t dfsc)
         return "syncrhonous partity or ECC error, level 3";
     case 0x21:
         return "alignment fault";
+#if defined(CONFIG_HAVE_CHERI)
+    case 0x28:
+        return "CHERI Tag violation";
+    case 0x29:
+        return "CHERI Seal violation";
+    case 0x2a:
+        return "CHERI Bounds violation";
+    case 0x2b:
+        return "CHERI Permissions violation";
+    case 0x2c:
+        return "CHERI Page table LC or SC permission violation fault";
+#endif
     case 0x30:
         return "tlb conflict abort";
     case 0x31:
@@ -849,6 +867,121 @@ static void print_tcb_registers(seL4_UserContext *regs, seL4_Word tcb_cap)
 #endif
 #elif defined(ARCH_aarch64)
     puts("Registers: \n");
+#if defined(CONFIG_HAVE_CHERI)
+    int reg_idx = 0;
+
+    puts("ddc : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, 37));
+    puts("\n");
+    puts("pcc : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("csp : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("spsr : ");
+    puthex64(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++).cheri_addr);
+    puts("\n");
+    puts("c0 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c1 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c2 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c3 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c4 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c5 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c6 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c7 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c8 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c16 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c17 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c18 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c29 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c30 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c9 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c10 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c11 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c12 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c13 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c14 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c15 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c19 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c20 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c21 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c22 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c23 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c24 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c25 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c26 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c27 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("c28 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("ctpidr_el0 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+    puts("tpidrro_el0 : ");
+    putchericap(seL4_TCB_CheriReadRegister(tcb_cap, reg_idx++));
+    puts("\n");
+#else
     puts("pc : ");
     puthex64(regs->pc);
     puts("\n");
@@ -957,6 +1090,7 @@ static void print_tcb_registers(seL4_UserContext *regs, seL4_Word tcb_cap)
     puts("tpidrro_el0 : ");
     puthex64(regs->tpidrro_el0);
     puts("\n");
+#endif
 #endif
 }
 
