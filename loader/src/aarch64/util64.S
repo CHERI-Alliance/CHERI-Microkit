@@ -60,6 +60,31 @@
 #define TCR_PS_16T        (4 << 16)
 #define TCR_PS_256T       (5 << 16)
 
+#define TCR_HPD0          (1UL << 41)
+#define TCR_HPD1          (1UL << 42)
+
+#define TCR_HWU162    (1UL << 50)
+#define TCR_HWU161    (1UL << 49)
+#define TCR_HWU160    (1UL << 48)
+#define TCR_HWU159    (1UL << 47)
+#define TCR_HWU1    \
+    (TCR_HWU159 | TCR_HWU160 | TCR_HWU161 | TCR_HWU162)
+
+#define TCR_HWU062    (1UL << 46)
+#define TCR_HWU061    (1UL << 45)
+#define TCR_HWU060    (1UL << 44)
+#define TCR_HWU059    (1UL << 43)
+#define TCR_HWU0    \
+        (TCR_HWU059 | TCR_HWU060 | TCR_HWU061 | TCR_HWU062)
+
+#define TCR_EL2_HWU062    (1UL << 28)
+#define TCR_EL2_HWU061    (1UL << 27)
+#define TCR_EL2_HWU060    (1UL << 26)
+#define TCR_EL2_HWU059    (1UL << 25)
+#define TCR_EL2_HWU0 \
+        (TCR_EL2_HWU059 | TCR_EL2_HWU060 | TCR_EL2_HWU061 | TCR_EL2_HWU062)
+#define TCR_EL2_HPD       (1UL << 24)
+
 #ifndef PHYSICAL_ADDRESS_BITS
 #error "Missing PHYSICAL_ADDRESS_BITS"
 #endif
@@ -310,6 +335,9 @@ BEGIN_FUNC(el1_mmu_enable)
     msr     mair_el1, x5
 
     ldr     x10, =TCR_TxSZ(48) | TCR_IRGN_WBWA | TCR_ORGN_WBWA | TCR_TG0_4K | TCR_TG1_4K | TCR_ASID16 /*| TCR_SHARED*/
+#if defined(CONFIG_HAVE_CHERI)
+    orr     x10, x10, (TCR_HWU0 | TCR_HWU1 | TCR_HPD0 | TCR_HPD1)
+#endif
     mrs     x9, ID_AA64MMFR0_EL1
     bfi     x10, x9, #32, #3
     msr     tcr_el1, x10
@@ -371,6 +399,14 @@ BEGIN_FUNC(el2_mmu_enable)
     msr     mair_el2, x5
 
     ldr     x8, =TCR_T0SZ(48) | TCR_IRGN0_WBWC | TCR_ORGN0_WBWC | TCR_SH0_ISH | TCR_TG0_4K | TCR_PS | TCR_EL2_RES1
+#if defined(CONFIG_HAVE_CHERI)
+    orr     x8, x8, (TCR_EL2_HWU0 | TCR_EL2_HPD)
+
+    /* Enable Morello instructions in all ELx */
+    mrs     x5, cptr_el2
+    orr     x5, x5, (0x3 << 18)
+    msr     cptr_el2, x5
+#endif
     msr     tcr_el2, x8
     isb
 

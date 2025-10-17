@@ -5,11 +5,31 @@
  */
 .extern main
 
+/*
+ * Initialize morello on a cpu
+ */
+#if defined(CONFIG_HAVE_CHERI)
+#define CPACR_CEN_MASK    (0x3 << 18)
+#define CPACR_CEN_TRAP_NONE  (0x3 << 18) /* No traps */
+
+.macro morello_cpu_init
+    /* Enable Morello instructions at EL0 and EL1 */
+    mrs x5, cpacr_el1
+    bic x5, x5, CPACR_CEN_MASK
+    orr x5, x5, CPACR_CEN_TRAP_NONE
+    msr cpacr_el1, x5
+    isb
+.endmacro
+#endif
+
 .section ".text.start"
 
 .global _start;
 .type _start, %function;
 _start:
+#if defined(CONFIG_HAVE_CHERI)
+     morello_cpu_init
+#endif
 
      mrs    x0, mpidr_el1
      and    x0, x0,#0xFF        // Check processor id

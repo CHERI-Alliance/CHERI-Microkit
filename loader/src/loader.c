@@ -32,7 +32,7 @@ _Static_assert(sizeof(uintptr_t) == 8 || sizeof(uintptr_t) == 4, "Expect uintptr
 #if defined(BOARD_zcu102) || defined(BOARD_ultra96v2)
 #define GICD_BASE 0x00F9010000UL
 #define GICC_BASE 0x00F9020000UL
-#elif defined(BOARD_qemu_virt_aarch64)
+#elif defined(BOARD_qemu_virt_aarch64) || defined(BOARD_morello_qemu)
 #define GICD_BASE 0x8000000UL
 #define GICC_BASE 0x8010000UL
 #endif
@@ -265,7 +265,7 @@ static void putc(uint8_t ch)
 
     *((volatile uint32_t *)(UART_BASE + R_UART_TX_RX_FIFO)) = ch;
 }
-#elif defined(BOARD_qemu_virt_aarch64)
+#elif defined(BOARD_qemu_virt_aarch64) || defined(BOARD_morello_qemu)
 #define UART_BASE                 0x9000000
 #define PL011_TCR                 0x030
 #define PL011_UARTDR              0x000
@@ -660,7 +660,8 @@ static int ensure_correct_el(void)
 }
 #endif
 
-#if defined(CONFIG_HAVE_CHERI) && defined(ARCH_riscv64)
+#if defined(CONFIG_HAVE_CHERI)
+#if defined(ARCH_riscv64)
 static inline void *__capability CheriArch_get_pcc(void)
 {
     void *__capability pcc;
@@ -713,7 +714,45 @@ static inline void *__capability CheriArch_create_ventry()
     return v_entry;
 
 }
-/* cheriTODO: Implement it for Morello */
+#elif defined(ARCH_aarch64)
+static inline void *__capability CheriArch_get_pcc(void)
+{
+    return __builtin_cheri_program_counter_get();
+}
+
+static inline void *__capability CheriArch_create_ventry()
+{
+    /* We need to build a valid pointer capability for the user's entry and pass
+     * it to the kernel which will jump to it if running on a CHERI hardware
+     */
+
+    /* Derive a new capability from the current PCC (almighty) and the capability address
+     * to the user's ELF's entry address.
+     */
+    void *__capability v_entry =  __builtin_cheri_address_set(CheriArch_get_pcc(), loader_data->v_entry);
+
+    if (loader_data->flags & FLAG_SEL4_CHERI_MONITOR_MODE) {
+        /* The monitor's ELF is purecap, bound the monitor's PCC */
+        v_entry = __builtin_cheri_bounds_set(v_entry, (size_t) loader_data->v_entry_size);
+
+        /* Set the run-time mode to capability mode (LSB) */
+        v_entry = (void *__capability) (((__uintcap_t)v_entry) | 0x1);
+    }
+
+    /* Remove Write and ASR permissions from the monitor's pointer capability.
+     * Also remove the ability to save/restore tagged CHERI capabilities.
+     * Right now we don't allow the monitor to be using any CHERI capabilities
+     * in memory and it's configured to be purely non-CHERI, even not hybrid.
+     */
+    v_entry = __builtin_cheri_perms_and(v_entry,
+        ~(__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__
+          | __CHERI_CAP_PERMISSION_PERMIT_STORE__
+          | __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__));
+
+    return v_entry;
+
+}
+#endif
 #endif
 
 static void start_kernel(void)
@@ -736,7 +775,7 @@ static void start_kernel(void)
     );
 }
 
-#if defined(BOARD_zcu102) || defined(BOARD_ultra96v2) || defined(BOARD_qemu_virt_aarch64)
+#if defined(BOARD_zcu102) || defined(BOARD_ultra96v2) || defined(BOARD_qemu_virt_aarch64) || defined(BOARD_morello_qemu)
 static void configure_gicv2(void)
 {
     /* The ZCU102 start in EL3, and then we drop to EL1(NS).
@@ -843,7 +882,7 @@ int main(void)
      */
     copy_data();
 
-#if defined(BOARD_zcu102) || defined(BOARD_ultra96v2) || defined(BOARD_qemu_virt_aarch64)
+#if defined(BOARD_zcu102) || defined(BOARD_ultra96v2) || defined(BOARD_qemu_virt_aarch64) || defined(BOARD_morello_qemu)
     configure_gicv2();
 #endif
 

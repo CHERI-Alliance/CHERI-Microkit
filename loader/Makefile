@@ -49,6 +49,8 @@ ifeq ($(ARCH),riscv64)
   # This is mainly to be able to construct and pass a valid, bounded, user-level
   # entry PCC to the kernel, and this requires a CHERI toolchain/arch
   ARCH_FLAGS := -march=rv64imac_zicsr_zifencei_zcherihybrid -mabi=lp64 -DCONFIG_HAVE_CHERI
+else ifeq ($(ARCH),aarch64)
+  ARCH_FLAGS := -march=morello -mabi=aapcs -DCONFIG_HAVE_CHERI
 endif
 else
 ifeq ($(ARCH),riscv64)
@@ -57,9 +59,9 @@ endif
 endif
 
 ifeq ($(ARCH),aarch64)
-  CFLAGS_AARCH64 := -DPHYSICAL_ADDRESS_BITS=$(PHYSICAL_ADDRESS_BITS) -mcpu=$(GCC_CPU) -mgeneral-regs-only
+  CFLAGS_AARCH64 := -DPHYSICAL_ADDRESS_BITS=$(PHYSICAL_ADDRESS_BITS) -mcpu=$(GCC_CPU) -mgeneral-regs-only $(ARCH_FLAGS)
   CFLAGS_ARCH := $(CFLAGS_AARCH64) -DARCH_aarch64
-  ASM_FLAGS_ARCH := -DPHYSICAL_ADDRESS_BITS=$(PHYSICAL_ADDRESS_BITS) -mcpu=$(GCC_CPU)
+  ASM_FLAGS_ARCH := -DPHYSICAL_ADDRESS_BITS=$(PHYSICAL_ADDRESS_BITS) -mcpu=$(GCC_CPU) $(ARCH_FLAGS)
   ARCH_DIR := aarch64
 else ifeq ($(ARCH),riscv64)
   CFLAGS_RISCV64 := -mcmodel=medany $(ARCH_FLAGS)
