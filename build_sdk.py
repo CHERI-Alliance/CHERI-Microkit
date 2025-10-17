@@ -347,14 +347,38 @@ SUPPORTED_BOARDS = (
             "KernelRiscvExtF": True,
         },
     ),
+    BoardInfo(
+        name="morello_qemu",
+        arch=KernelArch.AARCH64,
+        # morello/rainier is based on neoverse-n1. The following gcc_cpu is used
+        # for non-CHERI vanilla AArch64 builds to run on Morello. If CHERI is
+        # enabled, this gcc_cpu (passed to -mcpu) will have to be overriden.
+        gcc_cpu="neoverse-n1",
+        loader_link_address=0x70000000,
+        kernel_options={
+            "KernelPlatform": "morello-qemu",
+            "KernelIsMCS": True,
+            "KernelArmExportPCNTUser": True,
+            "QEMU_MEMORY": "2048",
+            "KernelArmHypervisorSupport": True,
+            "KernelArmExportPCNTUser": True,
+            "KernelArmExportPTMRUser": True,
+            "KernelArmVtimerUpdateVOffset": False,
+            "KernelAllowSMCCalls": True,
+        },
+    ),
 )
 
 SUPPORTED_CHERI_BOARDS = (
+   # RISC-V 64-bit boards
    "qemu_virt_riscv64",
    "hobgoblin_vcu118",
    "toooba_de10",
    "toooba_besspin",
-   "ariane"
+   "ariane",
+
+   # AArch64/Morello boards
+   "morello_qemu"
 )
 
 SUPPORTED_CONFIGS = (
@@ -632,8 +656,6 @@ def build_lib_component(
     cheri_purecap: bool
 ) -> None:
     """Build a specific library component.
-
-    Right now this is just libmicrokit.a
     """
     sel4_dir = root_dir / "board" / board.name / config.name
     build_dir = build_dir / board.name / config.name / component_name
@@ -801,8 +823,10 @@ def main() -> None:
                     if board.arch == KernelArch.RISCV64:
                         # cheriTODO: change the name of the extension when it's finalised
                         board.kernel_options["KernelRiscvExtY"] = True
-                    else: # cheriTODO: add Morello here
-                        continue
+                    elif board.arch == KernelArch.AARCH64:
+                        board.kernel_options["KernelArmMorello"] = True
+                    else:
+                        raise Exception("Unexpected CHERI architecture")
                 else:
                       continue
 
