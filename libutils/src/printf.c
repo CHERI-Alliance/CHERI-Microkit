@@ -133,7 +133,28 @@
 #define __CHERI_CAP_PERMISSION_GLOBAL__ (1 << 4) /* CL bit */
 
 #define CHERI_OTYPE_SENTRY 1
-/* cheriTODO: Implement for Morello and other CHERI archs */
+#elif defined(__aarch64__)
+#define __CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__ 512
+#define __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__ 32768
+#define __CHERI_CAP_PERMISSION_LOAD_MUTABLE__ 64
+#define __CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__ 16384
+#define __CHERI_CAP_PERMISSION_PERMIT_LOAD__ 131072
+#define __CHERI_CAP_PERMISSION_USER_00__ (1u << 2u)
+#define __CHERI_CAP_PERMISSION_USER_01__ (1u << 3u)
+#define __CHERI_CAP_PERMISSION_USER_02__ (1u << 3u)
+#define __CHERI_CAP_PERMISSION_USER_03__ (1u << 5u)
+#define __CHERI_CAP_PERMISSION_VMEM__ __CHERI_CAP_PERMISSION_USER_00__
+#define __CHERI_CAP_PERMISSION_PERMIT_STORE__ 65536
+#define __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ 8192
+#define __CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__ 4096
+#define __CHERI_CAP_PERMISSION_PERMIT_SEAL__ 2048
+#define __CHERI_CAP_PERMISSION_PERMIT_UNSEAL__ 1024
+#define __CHERI_CAP_PERMISSION_GLOBAL__ 1
+#define __ARM_CAP_PERMISSION_BRANCH_SEALED_PAIR__ 256
+#define __ARM_CAP_PERMISSION_COMPARTMENT_ID__ 128
+#define __ARM_CAP_PERMISSION_EXECUTIVE__ 2
+
+#define CHERI_OTYPE_SENTRY -1
 #endif
 #endif
 
@@ -597,7 +618,7 @@ static size_t _etoa(out_fct_type out, char* buffer, size_t idx, size_t maxlen, d
 #endif  // PRINTF_SUPPORT_EXPONENTIAL
 #endif  // PRINTF_SUPPORT_FLOAT
 
-#if defined(CONFIG_HAVE_CHERI)
+#if defined(__CHERI_PURE_CAPABILITY__)
 static const char xdigits[16] = {
   "0123456789ABCDEF"
 };
@@ -621,11 +642,13 @@ static int fmt_cap(out_fct_type out, const void *cap, unsigned fmt) {
     /* Attributes */
     const int type = __builtin_cheri_type_get(cap);
 #if defined(__riscv)
-    /* cheriTODO: fix/implement for Morello when addded */
     const int is_capmode = !__builtin_cheri_flags_get(cap);
+    const int is_sealed = 0;
+#elif defined(__aarch64__)
+    const int is_capmode = (__builtin_cheri_address_get(cap) & 0x1);
+    const int is_sealed = type != 0;
 #endif
     const int is_sentry = type == CHERI_OTYPE_SENTRY;
-    const int is_sealed = 0;
 
     if (is_sentry) { // sentry
         *--z = ')';
@@ -685,7 +708,7 @@ static int fmt_cap(out_fct_type out, const void *cap, unsigned fmt) {
         *--z = ' ';
     }
 
-    if (is_capmode && (perms & __CHERI_CAP_PERMISSION_EXECUTE__)) {
+    if (is_capmode && (perms & __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__)) {
         *--z = ')';
         *--z = 'e';
         *--z = 'd';
@@ -724,23 +747,6 @@ static int fmt_cap(out_fct_type out, const void *cap, unsigned fmt) {
      * fmt allows for additional formats to be specified and multiple formats to
      * be chained together.
      */
-#if defined(__aarch64__)
-    if (perms & __CHERI_CAP_PERMISSION_USER3__) {
-        *--z = '3';
-      }
-
-    if (perms & __CHERI_CAP_PERMISSION_USER2__) {
-        *--z = '2';
-    }
-
-    if (perms & __CHERI_CAP_PERMISSION_USER1__) {
-        *--z = '1';
-    }
-
-    if (perms & __CHERI_CAP_PERMISSION_VMEM__) {
-        *--z = 'V';
-    }
-#elif defined(__riscv)
     if (perms & __CHERI_CAP_PERMISSION_USER_03__) {
         *--z = '1';
     }
@@ -754,9 +760,12 @@ static int fmt_cap(out_fct_type out, const void *cap, unsigned fmt) {
     }
 
     if (perms & __CHERI_CAP_PERMISSION_USER_00__) {
+#if defined(__aarch64__)
+        *--z = 'V';
+#else
         *--z = '1';
-    }
 #endif
+    }
 
 #ifdef __ARM_CAP_PERMISSION_COMPARTMENT_ID__
     if (perms & __ARM_CAP_PERMISSION_COMPARTMENT_ID__) {
@@ -788,12 +797,6 @@ static int fmt_cap(out_fct_type out, const void *cap, unsigned fmt) {
     if (perms & __CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__) {
         *--z = 'S';
     }
-
-#ifdef __ARM_CAP_PERMISSION_MUTABLE_LOAD__
-    if (perms & __ARM_CAP_PERMISSION_MUTABLE_LOAD__) {
-        *--z = 'M';
-    }
-#endif
 
 #ifdef __CHERI_CAP_PERMISSION_LOAD_MUTABLE__
     if (perms & __CHERI_CAP_PERMISSION_LOAD_MUTABLE__) {
@@ -1098,7 +1101,7 @@ static int _vsnprintf(out_fct_type out, char* buffer, const size_t maxlen, const
       }
 
       case 'p' : {
-#if defined(CONFIG_HAVE_CHERI)
+#if defined(__CHERI_PURE_CAPABILITY__)
         if (flags & FLAGS_HASH) {
             idx = fmt_cap(out, va_arg(va, void*), 1);
             format++;

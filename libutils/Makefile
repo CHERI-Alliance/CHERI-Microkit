@@ -40,10 +40,14 @@ ifeq ($(CHERI),True)
 ifeq ($(ARCH),riscv64)
   # Build in purecap CHERI ABI
   ARCH_FLAGS := -march=rv64imafdc_zicsr_zcherihybrid -mabi=l64pc128d -DCONFIG_HAVE_CHERI
+else ifeq ($(ARCH),aarch64)
+  ARCH_FLAGS := -march=morello -mabi=purecap -DCONFIG_HAVE_CHERI
 endif
 else
 ifeq ($(ARCH),riscv64)
   ARCH_FLAGS := -march=rv64imafdc_zicsr_zifencei -mabi=lp64d
+else ifeq ($(ARCH),aarch64)
+  ARCH_FLAGS := -march=armv8-a
 endif
 endif
 
