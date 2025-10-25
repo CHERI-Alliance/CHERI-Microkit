@@ -31,6 +31,8 @@ ifeq ($(CHERI),True)
 ifeq ($(ARCH),riscv64)
   # Build in purecap CHERI ABI
   ARCH_FLAGS := -march=rv64imafdc_zicsr_zcherihybrid -mabi=l64pc128d
+else ifeq ($(ARCH),aarch64)
+  ARCH_FLAGS := -march=morello -mabi=purecap -DCONFIG_HAVE_CHERI
 endif
   LIBS := -lmicrokit_purecap
 else
@@ -42,7 +44,7 @@ endif
 
 ifeq ($(ARCH),aarch64)
   TARGET_TRIPLE := aarch64-none-elf
-  CFLAGS_ARCH := -mstrict-align
+  CFLAGS_ARCH := -mstrict-align $(ARCH_FLAGS)
 else ifeq ($(ARCH),riscv64)
   TARGET_TRIPLE := riscv64-unknown-elf
   CFLAGS_ARCH := $(ARCH_FLAGS)
