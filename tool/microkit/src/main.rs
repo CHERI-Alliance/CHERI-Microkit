@@ -24,6 +24,7 @@ use sel4::{
     default_vm_attr, Aarch64Regs, Arch, ArmVmAttributes, BootInfo, Config, Invocation,
     InvocationArgs, Object, ObjectType, PageSize, PlatformConfig, Rights, Riscv64Regs,
     RiscvVirtualMemory, RiscvVmAttributes,
+    CheriRiscvVmAttributes, MorelloVmAttributes,
 };
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
@@ -1833,8 +1834,8 @@ fn build_system(
                 /* Enable CHERI capability reads/writes by default. */
                 if config.cheri {
                     match config.arch {
-                        Arch::Aarch64 => {}, // cheriTODO: Support Morello
-                        Arch::Riscv64 => attrs |= RiscvVmAttributes::CheriCapWrite as u64,
+                        Arch::Aarch64 => attrs |= MorelloVmAttributes::CheriCapWrite as u64 | MorelloVmAttributes::CheriCapRead as u64,
+                        Arch::Riscv64 => attrs |= CheriRiscvVmAttributes::CheriCapWrite as u64,
                     }
                 }
 
@@ -2838,6 +2839,15 @@ fn build_system(
             InvocationArgs::ArmVcpuSetTcb { vcpu: 1, tcb: 1 },
         );
         system_invocations.push(vcpu_bind_invocation);
+
+        for (vm_idx, _vm) in virtual_machines.iter().enumerate() {
+            cheri::cheri_arch_vm_init_reg_context(
+                config,
+                &mut system_invocations,
+                vcpu_tcb_objs[vm_idx].cap_addr,
+                vm_vspace_objs[vm_idx].cap_addr,
+                vcpu_objs[vm_idx].cap_addr);
+        }
     }
 
     // Resume (start) all the threads that belong to PDs (VMs are not started upon system init)

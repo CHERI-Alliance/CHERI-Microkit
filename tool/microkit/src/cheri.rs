@@ -78,6 +78,77 @@ impl CheriRiscv64CapPermissions {
     pub const PERMIT_LOAD: u32 = 1 << 18;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MorelloCapPermissions;
+
+#[allow(dead_code)]
+impl MorelloCapPermissions {
+    pub const GLOBAL: u32                  = 1 << 0;
+    pub const EXECUTIVE: u32               = 1 << 1;
+
+    pub const USER_00: u32                 = 1 << 2;
+    pub const USER_01: u32                 = 1 << 3;
+    pub const USER_02: u32                 = 1 << 3;
+    pub const USER_03: u32                 = 1 << 5;
+    pub const VMEM: u32                    = Self::USER_00;
+
+    pub const LOAD_MUTABLE: u32            = 1 << 6;
+    pub const COMPARTMENT_ID: u32          = 1 << 7;
+    pub const BRANCH_SEALED_PAIR: u32      = 1 << 8;
+    pub const ACCESS_SYSTEM_REGISTERS: u32 = 1 << 9;
+    pub const PERMIT_UNSEAL: u32           = 1 << 10;
+    pub const PERMIT_SEAL: u32             = 1 << 11;
+    pub const PERMIT_STORE_LOCAL: u32      = 1 << 12;
+    pub const PERMIT_STORE_CAPABILITY: u32 = 1 << 13;
+    pub const PERMIT_LOAD_CAPABILITY: u32  = 1 << 14;
+    pub const PERMIT_EXECUTE: u32          = 1 << 15;
+    pub const PERMIT_STORE: u32            = 1 << 16;
+    pub const PERMIT_LOAD: u32             = 1 << 17;
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MorelloCapMeta {
+    raw: u64,
+}
+
+#[allow(dead_code)]
+impl MorelloCapMeta {
+    pub fn new() -> Self {
+        Self { raw: 0 }
+    }
+
+    pub fn raw(&self) -> u64 {
+        self.raw
+    }
+
+    // === V: bit 0 ===
+    pub fn set_v(&mut self, val: bool) {
+        if val {
+            self.raw |= 1 << 0;
+        } else {
+            self.raw &= !(1 << 0);
+        }
+    }
+
+    // === flags: bits 1–8 ===
+    pub fn set_flags(&mut self, val: u32) {
+        self.raw = (self.raw & !(0xFFu64 << 1)) | (((val as u64) & 0xFF) << 1);
+    }
+
+    // === T: bits 9–23 (15 bits) ===
+    pub fn set_t(&mut self, val: i16) {
+        // val is signed, but only lower 15 bits are stored
+        let mask: u64 = (1 << 15) - 1;
+        self.raw = (self.raw & !(mask << 9)) | (((val as u64) & mask) << 9);
+    }
+
+    // === AP: bits 24–41 (18 bits) ===
+    pub fn set_ap(&mut self, val: u32) {
+        let mask: u64 = (1 << 18) - 1;
+        self.raw = (self.raw & !(mask << 24)) | (((val as u64) & mask) << 24);
+    }
+}
+
 fn is_purecap(arch: &Arch, elf: &ElfFile) -> bool {
     match arch {
         Arch::Aarch64 => {
@@ -112,6 +183,7 @@ fn cheri_riscv_tcb_init_reg_context(
             InvocationArgs::CheriWriteRegister {
                 tcb: tcb_cptr,
                 vspace_root: vspace_cptr,
+                vcpu: 0,
                 reg_idx: 35,
                 cheri_base: 0,
                 cheri_addr: 0,
@@ -135,6 +207,7 @@ fn cheri_riscv_tcb_init_reg_context(
             InvocationArgs::CheriWriteRegister {
                 tcb: tcb_cptr,
                 vspace_root: vspace_cptr,
+                vcpu: 0,
                 reg_idx: 0,
                 cheri_base: code_segments[0].virt_addr,
                 cheri_addr: pd_elf_file.entry,
@@ -152,6 +225,7 @@ fn cheri_riscv_tcb_init_reg_context(
             InvocationArgs::CheriWriteRegister {
                 tcb: tcb_cptr,
                 vspace_root: vspace_cptr,
+                vcpu: 0,
                 reg_idx: 2,
                 cheri_base: config.pd_stack_top() - stack_size,
                 cheri_addr: config.pd_stack_top(),
@@ -170,6 +244,7 @@ fn cheri_riscv_tcb_init_reg_context(
             InvocationArgs::CheriWriteRegister {
                 tcb: tcb_cptr,
                 vspace_root: vspace_cptr,
+                vcpu: 0,
                 reg_idx: 16,
                 cheri_base: code_segments[0].virt_addr,
                 cheri_addr: code_segments[0].virt_addr,
@@ -185,6 +260,7 @@ fn cheri_riscv_tcb_init_reg_context(
             InvocationArgs::CheriWriteRegister {
                 tcb: tcb_cptr,
                 vspace_root: vspace_cptr,
+                vcpu: 0,
                 reg_idx: 17,
                 cheri_base: data_segments[0].virt_addr,
                 cheri_addr: data_segments[0].virt_addr,
@@ -207,6 +283,7 @@ fn cheri_riscv_tcb_init_reg_context(
             InvocationArgs::CheriWriteRegister {
                 tcb: tcb_cptr,
                 vspace_root: vspace_cptr,
+                vcpu: 0,
                 reg_idx: 0,
                 cheri_base: 0,
                 cheri_addr: pd_elf_file.entry,
@@ -222,6 +299,7 @@ fn cheri_riscv_tcb_init_reg_context(
             InvocationArgs::CheriWriteRegister {
                 tcb: tcb_cptr,
                 vspace_root: vspace_cptr,
+                vcpu: 0,
                 reg_idx: 35,
                 cheri_base: 0,
                 cheri_addr: 0,
@@ -230,6 +308,209 @@ fn cheri_riscv_tcb_init_reg_context(
             },
         ));
     }
+}
+
+fn morello_tcb_init_reg_context(
+    config: &Config,
+    system_invocations: &mut Vec<Invocation>,
+    tcb_cptr: u64,
+    vspace_cptr: u64,
+    stack_size: u64,
+    pd_elf_file: &ElfFile,
+) {
+    if is_purecap(&config.arch, pd_elf_file) {
+        let code_segments = pd_elf_file.code_segments();
+        let data_segments = pd_elf_file.data_segments();
+
+        if code_segments.len() != 1 || data_segments.len() != 1 {
+            eprintln!("CHERI Protection domain ELFs can only have one code segment and one data segment");
+            std::process::exit(1);
+        }
+
+        /* SPSR - Set C64 */
+        system_invocations.push(Invocation::new(
+            config,
+            InvocationArgs::CheriWriteRegister {
+                tcb: tcb_cptr,
+                vspace_root: 0,
+                vcpu: 0,
+                reg_idx: 2,
+                cheri_base: 0,
+                cheri_addr: (1<<6) | (1<<26),
+                cheri_size: 0,
+                cheri_meta: 0,
+            },
+        ));
+
+        /* Null DDC[_EL0] -- purecap won't have a valid DDC */
+        system_invocations.push(Invocation::new(
+            config,
+            InvocationArgs::CheriWriteRegister {
+                tcb: tcb_cptr,
+                vspace_root: vspace_cptr,
+                vcpu: 0,
+                reg_idx: 37,
+                cheri_base: 0,
+                cheri_addr: 0,
+                cheri_size: 0,
+                cheri_meta: 0,
+            },
+        ));
+
+        let mut meta = MorelloCapMeta::new();
+
+        /* PCC */
+        meta.set_v(true); // tag
+        meta.set_ap(u32::MAX & !(
+            MorelloCapPermissions::PERMIT_STORE |
+            MorelloCapPermissions::ACCESS_SYSTEM_REGISTERS
+        ));
+
+        system_invocations.push(Invocation::new(
+            config,
+            InvocationArgs::CheriWriteRegister {
+                tcb: tcb_cptr,
+                vspace_root: vspace_cptr,
+                vcpu: 0,
+                reg_idx: 0,
+                cheri_base: code_segments[0].virt_addr,
+                cheri_addr: pd_elf_file.entry & !0x1,
+                // XXX Make PCC cover both code and data segments, maybe refine later?
+                cheri_size: data_segments[0].virt_addr + data_segments[0].data.len() as u64 - code_segments[0].virt_addr,
+                cheri_meta: meta.raw(),
+            },
+        ));
+
+        /* CSP */
+        meta.set_ap(u32::MAX & !MorelloCapPermissions::PERMIT_EXECUTE);
+        system_invocations.push(Invocation::new(
+            config,
+            InvocationArgs::CheriWriteRegister {
+                tcb: tcb_cptr,
+                vspace_root: vspace_cptr,
+                vcpu: 0,
+                reg_idx: 1,
+                cheri_base: config.pd_stack_top() - stack_size,
+                cheri_addr: config.pd_stack_top(),
+                cheri_size: stack_size,
+                cheri_meta: meta.raw(),
+            },
+        ));
+
+        /* C0 -- Code cap passed to crt0 to construct code caps from */
+        meta.set_ap(u32::MAX & !(
+            MorelloCapPermissions::PERMIT_STORE |
+            MorelloCapPermissions::ACCESS_SYSTEM_REGISTERS
+        ));
+        system_invocations.push(Invocation::new(
+            config,
+            InvocationArgs::CheriWriteRegister {
+                tcb: tcb_cptr,
+                vspace_root: vspace_cptr,
+                vcpu: 0,
+                reg_idx: 3,
+                cheri_base: code_segments[0].virt_addr,
+                cheri_addr: code_segments[0].virt_addr,
+                cheri_size: code_segments[0].data.len() as u64,
+                cheri_meta: meta.raw(),
+            },
+        ));
+
+        /* C1 -- Data cap passed to crt0 to construct code caps from */
+        meta.set_ap(u32::MAX & !MorelloCapPermissions::PERMIT_EXECUTE);
+        system_invocations.push(Invocation::new(
+            config,
+            InvocationArgs::CheriWriteRegister {
+                tcb: tcb_cptr,
+                vspace_root: vspace_cptr,
+                vcpu: 0,
+                reg_idx: 4,
+                cheri_base: data_segments[0].virt_addr,
+                cheri_addr: data_segments[0].virt_addr,
+                cheri_size: data_segments[0].data.len() as u64,
+                cheri_meta: meta.raw(),
+            },
+        ));
+    } else {
+        // Hybrid/legacy ELFs. Set PCC/DDC to almighty
+
+        let mut meta = MorelloCapMeta::new();
+
+        /* PCC */
+        meta.set_v(true); // tag
+        meta.set_ap(u32::MAX);
+        system_invocations.push(Invocation::new(
+            config,
+            InvocationArgs::CheriWriteRegister {
+                tcb: tcb_cptr,
+                vspace_root: vspace_cptr,
+                vcpu: 0,
+                reg_idx: 0,
+                cheri_base: 0,
+                cheri_addr: pd_elf_file.entry,
+                cheri_size: u64::MAX,
+                cheri_meta: meta.raw(),
+            },
+        ));
+
+        /* DDC */
+        system_invocations.push(Invocation::new(
+            config,
+            InvocationArgs::CheriWriteRegister {
+                tcb: tcb_cptr,
+                vspace_root: vspace_cptr,
+                vcpu: 0,
+                reg_idx: 37,
+                cheri_base: 0,
+                cheri_addr: 0,
+                cheri_size: u64::MAX,
+                cheri_meta: meta.raw(),
+            },
+        ));
+    }
+}
+
+fn morello_vm_init_reg_context(
+    config: &Config,
+    system_invocations: &mut Vec<Invocation>,
+    tcb_cptr: u64,
+    vspace_cptr: u64,
+    vcpu: u64
+) {
+    // Set VM's PCC/DDC to almighty
+    let mut meta = MorelloCapMeta::new();
+
+    /* PCC */
+    meta.set_v(true); // tag
+    meta.set_ap(u32::MAX);
+    system_invocations.push(Invocation::new(
+        config,
+        InvocationArgs::CheriWriteRegister {
+            tcb: tcb_cptr,
+            vspace_root: vspace_cptr,
+            vcpu: vcpu,
+            reg_idx: 0,
+            cheri_base: 0,
+            cheri_addr: 0,
+            cheri_size: u64::MAX,
+            cheri_meta: meta.raw(),
+        },
+    ));
+
+    /* DDC */
+    system_invocations.push(Invocation::new(
+        config,
+        InvocationArgs::CheriWriteRegister {
+            tcb: tcb_cptr,
+            vspace_root: vspace_cptr,
+            vcpu: 0,
+            reg_idx: 37,
+            cheri_base: 0,
+            cheri_addr: 0,
+            cheri_size: u64::MAX,
+            cheri_meta: meta.raw(),
+        },
+    ));
 }
 
 pub fn cheri_arch_tcb_init_reg_context(
@@ -249,10 +530,33 @@ pub fn cheri_arch_tcb_init_reg_context(
             stack_size,
             pd_elf_file,
         ),
-        _ => {
-            eprintln!("Only CHERI-RISC-V 64-bit is supported at the moment");
-            std::process::exit(1);
-        }
+        Arch::Aarch64 => morello_tcb_init_reg_context(
+            config,
+            system_invocations,
+            tcb_cptr,
+            vspace_cptr,
+            stack_size,
+            pd_elf_file,
+        ),
+    }
+}
+
+pub fn cheri_arch_vm_init_reg_context(
+    config: &Config,
+    system_invocations: &mut Vec<Invocation>,
+    tcb_cptr: u64,
+    vspace_cptr: u64,
+    vcpu: u64,
+) {
+    match config.arch {
+        Arch::Aarch64 => morello_vm_init_reg_context(
+            config,
+            system_invocations,
+            tcb_cptr,
+            vspace_cptr,
+            vcpu,
+        ),
+        _ => panic!("cheri_arch_vm_init_reg_context() is only supported on AArch64"),
     }
 }
 
@@ -290,6 +594,59 @@ fn cheri_riscv_write_sym_cap(
 
         meta.set_v(true); // tag
         meta.set_m(false); // Capability Pointer Mode (capmode)
+        meta.set_ap(cap_perms);
+
+        system_invocations.push(Invocation::new(
+            config,
+            InvocationArgs::CheriWriteMemoryCap {
+                tcb: tcb_cptr,
+                vspace_root: vspace_cptr,
+                page: page_cptr,
+                vaddr,
+                cheri_base: addr,
+                cheri_addr: addr,
+                cheri_size: size,
+                cheri_meta: meta.raw(),
+            },
+        ));
+    }
+}
+
+fn morello_write_sym_cap(
+    config: &Config,
+    system_invocations: &mut Vec<Invocation>,
+    pd_elf_file: &ElfFile,
+    tcb_cptr: u64,
+    vspace_cptr: u64,
+    page_cptr: u64,
+    vaddr: u64,
+    addr: u64,
+    size: u64,
+    map_perms: u8,
+) {
+    if is_purecap(&config.arch, pd_elf_file) {
+        let mut meta = MorelloCapMeta::new();
+        let mut cap_perms = 0;
+
+        if map_perms & SysMapPerms::Read as u8 != 0 {
+            cap_perms |= MorelloCapPermissions::PERMIT_LOAD;
+            if map_perms & SysMapPerms::Cheri as u8 != 0 {
+                cap_perms |= MorelloCapPermissions::PERMIT_LOAD_CAPABILITY;
+            }
+        }
+
+        if map_perms & SysMapPerms::Write as u8 != 0 {
+            cap_perms |= MorelloCapPermissions::PERMIT_STORE;
+            if map_perms & SysMapPerms::Cheri as u8 != 0 {
+                cap_perms |= MorelloCapPermissions::PERMIT_STORE_CAPABILITY;
+            }
+        }
+
+        if map_perms & SysMapPerms::Execute as u8 != 0 {
+            cap_perms |= MorelloCapPermissions::PERMIT_EXECUTE;
+        }
+
+        meta.set_v(true); // tag
         meta.set_ap(cap_perms);
 
         system_invocations.push(Invocation::new(
@@ -367,10 +724,18 @@ pub fn cheri_arch_write_sym_cap(
                 size,
                 map_perms,
             ),
-            _ => {
-                eprintln!("Only CHERI-RISC-V 64-bit is supported at the moment");
-                std::process::exit(1);
-            }
+            Arch::Aarch64 => morello_write_sym_cap(
+                config,
+                system_invocations,
+                pd_elf_file,
+                tcb_cptr,
+                vspace_cptr,
+                page_cptr,
+                sym_vaddr,
+                addr,
+                size,
+                map_perms,
+            ),
         }
     }
 }

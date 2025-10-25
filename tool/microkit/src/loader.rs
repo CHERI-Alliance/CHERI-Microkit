@@ -21,6 +21,9 @@ const AARCH64_LVL0_BITS: u64 = 9;
 const AARCH64_LVL1_BITS: u64 = 9;
 const AARCH64_LVL2_BITS: u64 = 9;
 
+const MORELLO_SC: u64 = 0x1 << 60; /* Capability Write */
+const MORELLO_LC: u64 = 0x1 << 61; /* Capability Read */
+
 struct Aarch64;
 impl Aarch64 {
     pub fn lvl0_index(addr: u64) -> usize {
@@ -76,7 +79,20 @@ impl Riscv64 {
     }
 
     pub fn pte_leaf(addr: u64) -> u64 {
-        Self::pte_ppn(addr) | Self::PTE_CHERI_CW | Self::PTE_TYPE_BITS | Self::PTE_TYPE_VALID
+        Self::pte_ppn(addr) | Self::PTE_TYPE_BITS | Self::PTE_TYPE_VALID
+    }
+}
+
+struct CheriRiscv64 {
+    _base: Riscv64,
+}
+
+impl CheriRiscv64 {
+    pub fn pte_leaf(addr: u64) -> u64 {
+        Riscv64::pte_ppn(addr)
+            | Riscv64::PTE_CHERI_CW
+            | Riscv64::PTE_TYPE_BITS
+            | Riscv64::PTE_TYPE_VALID
     }
 }
 
@@ -222,6 +238,7 @@ impl<'a> Loader<'a> {
         assert!(kernel_first_vaddr.is_some());
         let pagetable_vars = match config.arch {
             Arch::Aarch64 => Loader::aarch64_setup_pagetables(
+                config,
                 &elf,
                 kernel_first_vaddr.unwrap(),
                 kernel_first_paddr.unwrap(),
@@ -412,7 +429,8 @@ impl<'a> Loader<'a> {
                 let start = 8 * i;
                 let end = start + 8;
                 let addr = text_addr + ((page as u64) << Riscv64::BLOCK_BITS_2MB);
-                let pt_entry = Riscv64::pte_leaf(addr);
+                let pt_entry = if config.cheri { CheriRiscv64::pte_leaf(addr) }
+                               else { Riscv64::pte_leaf(addr) };
                 boot_lvl2_pt_elf[start..end].copy_from_slice(&pt_entry.to_le_bytes());
             }
         }
@@ -433,7 +451,8 @@ impl<'a> Loader<'a> {
                 let start = 8 * i;
                 let end = start + 8;
                 let addr = first_paddr + ((page as u64) << Riscv64::BLOCK_BITS_2MB);
-                let pt_entry = Riscv64::pte_leaf(addr);
+                let pt_entry = if config.cheri { CheriRiscv64::pte_leaf(addr) }
+                               else { Riscv64::pte_leaf(addr) };
                 boot_lvl2_pt[start..end].copy_from_slice(&pt_entry.to_le_bytes());
             }
         }
@@ -450,6 +469,7 @@ impl<'a> Loader<'a> {
     }
 
     fn aarch64_setup_pagetables(
+        config: &Config,
         elf: &ElfFile,
         first_vaddr: u64,
         first_paddr: u64,
@@ -477,6 +497,7 @@ impl<'a> Loader<'a> {
         for i in 0..512 {
             #[allow(clippy::identity_op)] // keep the (0 << 2) for clarity
             let pt_entry: u64 = ((i as u64) << AARCH64_1GB_BLOCK_BITS) |
+                if config.cheri { MORELLO_SC | MORELLO_LC } else { 0 } |
                 (1 << 10) | // access flag
                 (0 << 2) | // strongly ordered memory
                 (1); // 1G block
@@ -505,6 +526,7 @@ impl<'a> Loader<'a> {
         for i in lvl2_idx..512 {
             let entry_idx = (i - Aarch64::lvl2_index(first_vaddr)) << AARCH64_2MB_BLOCK_BITS;
             let pt_entry: u64 = (entry_idx as u64 + first_paddr) |
+                if config.cheri { MORELLO_SC | MORELLO_LC } else { 0 } |
                 (1 << 10) | // Access flag
                 (3 << 8) | // Make sure the shareability is the same as the kernel's
                 (4 << 2) | // MT_NORMAL memory

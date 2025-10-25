@@ -196,7 +196,10 @@ impl ObjectType {
     pub fn fixed_size_bits(self, config: &Config) -> Option<u64> {
         match self {
             ObjectType::Tcb => match config.arch {
-                Arch::Aarch64 => Some(11),
+                Arch::Aarch64 => match config.cheri {
+                    true => Some(12),
+                    false => Some(11),
+                },
                 Arch::Riscv64 => match config.fpu {
                     true => Some(11),
                     false => Some(10),
@@ -331,12 +334,20 @@ pub enum ArmVmAttributes {
     ExecuteNever = 4,
 }
 
+pub enum MorelloVmAttributes {
+    CheriCapWrite = 0x1 << 60,
+    CheriCapRead = 0x1 << 61,
+}
+
 /// Virtual memory attributes for RISC-V
 /// The values for each enum variant corresponds to what seL4
 /// expects when doing a virtual memory invocation.
 #[repr(u64)]
 pub enum RiscvVmAttributes {
     ExecuteNever = 1,
+}
+
+pub enum CheriRiscvVmAttributes {
     CheriCapWrite = 0x1 << 60
 }
 
@@ -350,14 +361,37 @@ impl ArmVmAttributes {
 impl RiscvVmAttributes {
     #[allow(clippy::should_implement_trait)] // Default::default would return Self, not u64
     pub fn default() -> u64 {
-        RiscvVmAttributes::CheriCapWrite as u64
+        0
+    }
+}
+
+impl MorelloVmAttributes {
+    #[allow(clippy::should_implement_trait)] // Default::default would return Self, not u64
+    pub fn default() -> u64 {
+        ArmVmAttributes::Cacheable as u64 | ArmVmAttributes::ParityEnabled as u64 |
+        MorelloVmAttributes::CheriCapWrite as u64 | MorelloVmAttributes::CheriCapRead as u64
+    }
+}
+
+impl CheriRiscvVmAttributes {
+    #[allow(clippy::should_implement_trait)] // Default::default would return Self, not u64
+    pub fn default() -> u64 {
+        CheriRiscvVmAttributes::CheriCapWrite as u64
     }
 }
 
 pub fn default_vm_attr(config: &Config) -> u64 {
-    match config.arch {
-        Arch::Aarch64 => ArmVmAttributes::default(),
-        Arch::Riscv64 => RiscvVmAttributes::default(),
+    match config.cheri {
+     true =>
+        match config.arch {
+            Arch::Aarch64 => MorelloVmAttributes::default(),
+            Arch::Riscv64 => CheriRiscvVmAttributes::default(),
+        },
+     false =>
+        match config.arch {
+            Arch::Aarch64 => ArmVmAttributes::default(),
+            Arch::Riscv64 => RiscvVmAttributes::default(),
+        }
     }
 }
 
@@ -943,6 +977,7 @@ impl Invocation {
             InvocationArgs::CheriWriteRegister{
                 tcb,
                 vspace_root,
+                vcpu,
                 reg_idx,
                 cheri_base,
                 cheri_addr,
@@ -952,6 +987,11 @@ impl Invocation {
                 arg_strs.push(Invocation::fmt_field_cap(
                     "vspace_root",
                     vspace_root,
+                    cap_lookup,
+                ));
+                arg_strs.push(Invocation::fmt_field_cap(
+                    "vcpu",
+                    vcpu,
                     cap_lookup,
                 ));
                 arg_strs.push(Invocation::fmt_field("reg_idx", reg_idx as u64));
@@ -1305,13 +1345,14 @@ impl InvocationArgs {
             InvocationArgs::CheriWriteRegister {
                 tcb,
                 vspace_root,
+                vcpu,
                 reg_idx,
                 cheri_base,
                 cheri_addr,
                 cheri_size,
                 cheri_meta,
             } => {
-                (tcb, vec![reg_idx, cheri_base, cheri_addr, cheri_size, cheri_meta], vec![vspace_root])
+                (tcb, vec![reg_idx, cheri_base, cheri_addr, cheri_size, cheri_meta], vec![vspace_root, vcpu])
             }
             InvocationArgs::CheriWriteMemoryCap {
                 tcb,
@@ -1452,6 +1493,7 @@ pub enum InvocationArgs {
     CheriWriteRegister {
         tcb: u64,
         vspace_root: u64,
+        vcpu: u64,
         reg_idx: u64,
         cheri_base: u64,
         cheri_addr: u64,
