@@ -139,8 +139,9 @@ static inline void microkit_pd_restart(microkit_child pd, seL4_Word entry_point)
      */
     err = seL4_TCB_CheriWriteRegister(
               BASE_TCB_CAP + pd,
-              0, /* PCC register index */
               0, /* Invalid vspace will force deriving from the PCC register and not construct a completely new CHERI cap. */
+              0, /* Invalid/no vcpu */
+              0, /* PCC register index */
               unpacked_reg.cheri_base,
               entry_point,
               unpacked_reg.cheri_size,
@@ -223,6 +224,39 @@ static inline void microkit_vcpu_restart(microkit_child vcpu, seL4_Word entry_po
     seL4_Error err;
     seL4_UserContext ctxt = {0};
     ctxt.pc = entry_point;
+#if defined(CONFIG_HAVE_CHERI)
+    /* We are under a CHERI-enabled kernel, but we can be compiled with a CHERI toolchain
+     * or not at all. In either case, the CHERI hardware PCC register needs to be a valid
+     * and tagged register. We will first read the current PC address from the TCB,
+     * then derive a valid PCC from its existing PCC.
+     */
+    seL4_TCB_CheriReadRegister_t unpacked_reg;
+    unpacked_reg = seL4_TCB_CheriReadRegister(
+              BASE_VM_TCB_CAP + vcpu,
+              0 /* PCC register index */
+          );
+
+    /* Construct and write a new PCC with the restart address from the existing
+     * PCC, which should already be a valid CHERI register covering
+     * the entire code segement.
+     * This doesn't increase any permissions or bounds for PCC, following CHERI rules.
+     */
+    err = seL4_TCB_CheriWriteRegister(
+              BASE_VM_TCB_CAP + vcpu,
+              0, /* Invalid vspace will force deriving from the PCC register and not construct a completely new CHERI cap. */
+              BASE_VCPU_CAP + vcpu, /* vcpu cap is needed to grant CHERI's ASR permission (EL1 registers) */
+              0, /* PCC register index */
+              unpacked_reg.cheri_base,
+              entry_point,
+              unpacked_reg.cheri_size,
+              unpacked_reg.cheri_meta
+          );
+
+    if (err == seL4_NoError) {
+        /* Need to resume the TCB to execute from the new PCC */
+        err = seL4_TCB_Resume(BASE_VM_TCB_CAP + vcpu);
+    }
+#else
     err = seL4_TCB_WriteRegisters(
               BASE_VM_TCB_CAP + vcpu,
               seL4_True,
@@ -230,6 +264,7 @@ static inline void microkit_vcpu_restart(microkit_child vcpu, seL4_Word entry_po
               1, /* writing 1 register */
               &ctxt
           );
+#endif
 
     if (err != seL4_NoError) {
         microkit_dbg_puts("microkit_vcpu_restart: error writing registers\n");
