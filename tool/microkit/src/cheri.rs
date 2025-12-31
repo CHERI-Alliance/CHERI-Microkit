@@ -248,7 +248,7 @@ fn cheri_riscv_tcb_init_reg_context(
                 reg_idx: 16,
                 cheri_base: code_segments[0].virt_addr,
                 cheri_addr: code_segments[0].virt_addr,
-                cheri_size: code_segments[0].data.len() as u64,
+                cheri_size: data_segments[0].virt_addr + data_segments[0].data.len() as u64 - code_segments[0].virt_addr,
                 cheri_meta: meta.raw(),
             },
         ));
@@ -411,7 +411,7 @@ fn morello_tcb_init_reg_context(
                 reg_idx: 3,
                 cheri_base: code_segments[0].virt_addr,
                 cheri_addr: code_segments[0].virt_addr,
-                cheri_size: code_segments[0].data.len() as u64,
+                cheri_size: data_segments[0].virt_addr + data_segments[0].data.len() as u64 - code_segments[0].virt_addr,
                 cheri_meta: meta.raw(),
             },
         ));
