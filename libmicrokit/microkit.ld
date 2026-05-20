@@ -5,8 +5,8 @@
  */
 PHDRS
 {
-    text PT_LOAD;
-    data PT_LOAD;
+    text PT_LOAD FLAGS(5); /* R-X */
+    data PT_LOAD FLAGS(6); /* RW- */
 }
 
 ENTRY(_start);
@@ -25,6 +25,19 @@ SECTIONS
     } :text
 
     . = ALIGN(0x1000);
+
+    .data.rel.ro :
+    {
+        *(.data.rel.ro)
+        *(.data.rel.ro.*)
+    } :data
+
+    .got :
+    {
+        *(.got)
+        *(.got.*)
+        *(.got.plt)
+    } :data
 
     /* For some reason the ABI puts init array
      * into writable memory, so we have to follow suit */
