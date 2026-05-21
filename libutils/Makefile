@@ -92,3 +92,4 @@ $(LIB): $(addprefix $(BUILD_DIR)/, $(OBJS))
 
 clean:
 	rm -f $(addprefix $(BUILD_DIR)/, $(OBJS))
+	rm -f $(BUILD_DIR)/*.a
