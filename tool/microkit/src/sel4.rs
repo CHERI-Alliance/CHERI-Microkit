@@ -200,10 +200,7 @@ impl ObjectType {
                     true => Some(12),
                     false => Some(11),
                 },
-                Arch::Riscv64 => match config.fpu {
-                    true => Some(11),
-                    false => Some(10),
-                },
+                Arch::Riscv64 => Some(if config.cheri || config.fpu { 11 } else { 10 }),
             },
             ObjectType::Endpoint => Some(4),
             ObjectType::Notification => Some(6),
