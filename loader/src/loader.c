@@ -665,13 +665,13 @@ static int ensure_correct_el(void)
 static inline void *__capability CheriArch_get_pcc(void)
 {
     void *__capability pcc;
-    /* cheriTODO: use a compiler builtin once supported */
-    asm volatile("modesw.cap       \n"
+    /* cheriTODO: user a compiler builtin once supported */
+    asm volatile("ymodeswy         \n"
                  ".option push     \n"
                  ".option capmode  \n"
                  "auipc %0, 0      \n"
                  ".option pop      \n"
-                 "modesw.int       \n"
+                 "ymodeswi         \n"
                  :"=C"(pcc)::);
     return pcc;
 }

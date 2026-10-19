@@ -57,7 +57,7 @@ impl Riscv64 {
 
     const PTE_PPN0_SHIFT: u64 = 10;
 
-    const PTE_CHERI_CW: u64 = 0x1 << 60; /* Capability Write (and Read). */
+    const PTE_Y: u64 = 0x1 << 58; /* RVY Capability Enable */
 
     /// Due to RISC-V having various virtual memory setups, we have this generic function to
     /// figure out the page-table index given the total number of page table levels for the
@@ -90,7 +90,7 @@ struct CheriRiscv64 {
 impl CheriRiscv64 {
     pub fn pte_leaf(addr: u64) -> u64 {
         Riscv64::pte_ppn(addr)
-            | Riscv64::PTE_CHERI_CW
+            | Riscv64::PTE_Y
             | Riscv64::PTE_TYPE_BITS
             | Riscv64::PTE_TYPE_VALID
     }
@@ -313,7 +313,7 @@ impl<'a> Loader<'a> {
         // Tell the run-time C loader that whether the monitor is purecap/capmode
         flags |= match config.arch {
             Arch::Aarch64 => if (elf_flags & ElfFlagsAArch64::EfAarch64CheriPurecap as u64) != 0 {1 << 2} else {0},
-            Arch::Riscv64 => if (elf_flags & ElfFlagsRiscv::EfRiscvCapMode as u64) != 0 {1 << 2} else {0},
+            Arch::Riscv64 => if (elf_flags & ElfFlagsRiscv::EfRiscvRvy as u64) != 0 {1 << 2} else {0},
         };
 
         let mut region_metadata = Vec::new();

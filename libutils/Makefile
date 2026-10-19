@@ -39,7 +39,7 @@ endif
 ifeq ($(CHERI),True)
 ifeq ($(ARCH),riscv64)
   # Build in purecap CHERI ABI
-  ARCH_FLAGS := -march=rv64imafdc_zicsr_zcherihybrid -mabi=l64pc128d -DCONFIG_HAVE_CHERI
+  ARCH_FLAGS := -march=rv64imafdc_zicsr_zyhybrid_zylg -mabi=l64pc128d -DCONFIG_HAVE_CHERI
 else ifeq ($(ARCH),aarch64)
   ARCH_FLAGS := -march=morello -mabi=purecap -DCONFIG_HAVE_CHERI
 endif

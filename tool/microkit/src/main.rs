@@ -1835,7 +1835,7 @@ fn build_system(
                 if config.cheri {
                     match config.arch {
                         Arch::Aarch64 => attrs |= MorelloVmAttributes::CheriCapWrite as u64 | MorelloVmAttributes::CheriCapRead as u64,
-                        Arch::Riscv64 => attrs |= CheriRiscvVmAttributes::CheriCapWrite as u64,
+                        Arch::Riscv64 => attrs |= CheriRiscvVmAttributes::Rvy as u64,
                     }
                 }
 

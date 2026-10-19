@@ -155,7 +155,7 @@ fn is_purecap(arch: &Arch, elf: &ElfFile) -> bool {
             (elf.flags & (ElfFlagsAArch64::EfAarch64CheriPurecap as u64)) != 0
         }
         Arch::Riscv64 => {
-            (elf.flags & (ElfFlagsRiscv::EfRiscvCapMode as u64)) != 0
+            (elf.flags & (ElfFlagsRiscv::EfRiscvRvy as u64)) != 0
         }
     }
 }

@@ -345,7 +345,7 @@ pub enum RiscvVmAttributes {
 }
 
 pub enum CheriRiscvVmAttributes {
-    CheriCapWrite = 0x1 << 60
+    Rvy = 0x1 << 58
 }
 
 impl ArmVmAttributes {
@@ -373,7 +373,7 @@ impl MorelloVmAttributes {
 impl CheriRiscvVmAttributes {
     #[allow(clippy::should_implement_trait)] // Default::default would return Self, not u64
     pub fn default() -> u64 {
-        CheriRiscvVmAttributes::CheriCapWrite as u64
+        CheriRiscvVmAttributes::Rvy as u64
     }
 }
 

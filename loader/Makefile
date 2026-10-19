@@ -48,7 +48,7 @@ ifeq ($(ARCH),riscv64)
   # Only support building the loader in hybrid CHERI mode
   # This is mainly to be able to construct and pass a valid, bounded, user-level
   # entry PCC to the kernel, and this requires a CHERI toolchain/arch
-  ARCH_FLAGS := -march=rv64imac_zicsr_zifencei_zcherihybrid -mabi=lp64 -DCONFIG_HAVE_CHERI
+  ARCH_FLAGS := -march=rv64imac_zicsr_zifencei_zyhybrid_zylg -mabi=lp64 -DCONFIG_HAVE_CHERI
 else ifeq ($(ARCH),aarch64)
   ARCH_FLAGS := -march=morello -mabi=aapcs -DCONFIG_HAVE_CHERI
 endif
