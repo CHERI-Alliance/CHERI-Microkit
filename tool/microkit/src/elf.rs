@@ -132,10 +132,8 @@ enum ElfSegmentAttributes {
 }
 
 // e_flags field definitions of ELFs for RISC-V
-// See: https://github.com/CTSRD-CHERI/cheri-elf-psabi/blob/master/riscv.md
 pub enum ElfFlagsRiscv {
-    EfRiscvCheriabi = 0x00010000,
-    EfRiscvCapMode = 0x00020000,
+    EfRiscvRvy = 0x40,
 }
 
 // e_flags field definitions of ELFs for AArch64

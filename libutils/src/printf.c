@@ -130,7 +130,6 @@
 #define __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ 1
 #define __CHERI_CAP_PERMISSION_PERMIT_EL__ (1 << 2) /* EL bit */
 #define __CHERI_CAP_PERMISSION_PERMIT_SL__ (1 << 3) /* SL bit */
-#define __CHERI_CAP_PERMISSION_GLOBAL__ (1 << 4) /* CL bit */
 
 #define CHERI_OTYPE_SENTRY 1
 #elif defined(__aarch64__)
